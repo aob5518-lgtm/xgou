@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: xgou
+      POSTGRES_PASSWORD: xgou_dev_only
+      POSTGRES_DB: xgou
+    ports: ["5432:5432"]
+    volumes: ["xgou-postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xgou"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes: ["xgou-redis:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://xgou:xgou_dev_only@postgres:5432/xgou?schema=public
+      REDIS_URL: redis://redis:6379
+    ports: ["3001:3001"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+volumes:
+  xgou-postgres:
+  xgou-redis:

@@ -1,0 +1,27 @@
+{
+  "name": "xgou-platform",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "db:generate": "pnpm --filter @xgou/database generate",
+    "db:migrate": "pnpm --filter @xgou/database migrate",
+    "db:seed": "pnpm --filter @xgou/database seed",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "eslint": "latest",
+    "prettier": "latest",
+    "turbo": "latest",
+    "typescript": "6.0.2",
+    "typescript-eslint": "latest"
+  }
+}

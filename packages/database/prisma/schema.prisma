@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  OPERATOR
+  RISK_MANAGER
+  ADMIN
+}
+
+enum ParticipationStatus {
+  PENDING
+  EFFECTIVE
+  CANCELLED
+}
+
+enum RiskFlagStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id                  String               @id @default(uuid()) @db.Uuid
+  walletAddress       String               @unique @db.VarChar(42)
+  role                UserRole             @default(USER)
+  deviceFingerprint   String?              @db.VarChar(128)
+  registrationIpHash  String?              @db.VarChar(64)
+  riskScore           Decimal              @default(0) @db.Decimal(8, 4)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  sessions             RefreshSession[]
+  inviterEdge          ReferralEdge?        @relation("ReferralDescendant")
+  directReferrals      ReferralEdge[]        @relation("ReferralAncestor")
+  referralAncestors    ReferralClosure[]     @relation("ClosureDescendant")
+  referralDescendants  ReferralClosure[]     @relation("ClosureAncestor")
+  participations       Participation[]
+  principalXpEntries   PrincipalXpEntry[]
+  xpSnapshots          XpSnapshot[]
+  riskFlags            RiskFlag[]
+}
+
+model AuthNonce {
+  id            String   @id @default(uuid()) @db.Uuid
+  walletAddress String   @db.VarChar(42)
+  nonceHash     String   @unique @db.VarChar(64)
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  createdAt     DateTime @default(now())
+  @@index([walletAddress, expiresAt])
+}
+
+model RefreshSession {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  tokenHash  String   @unique @db.VarChar(64)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  rotatedFromId String? @db.Uuid
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model ReferralEdge {
+  userId        String   @id @db.Uuid
+  inviterUserId String   @db.Uuid
+  createdAt     DateTime @default(now())
+  user          User     @relation("ReferralDescendant", fields: [userId], references: [id], onDelete: Restrict)
+  inviter       User     @relation("ReferralAncestor", fields: [inviterUserId], references: [id], onDelete: Restrict)
+  @@index([inviterUserId])
+  @@index([createdAt])
+}
+
+model ReferralClosure {
+  ancestorId   String   @db.Uuid
+  descendantId String   @db.Uuid
+  depth        Int
+  createdAt    DateTime @default(now())
+  ancestor     User     @relation("ClosureAncestor", fields: [ancestorId], references: [id], onDelete: Restrict)
+  descendant   User     @relation("ClosureDescendant", fields: [descendantId], references: [id], onDelete: Restrict)
+  @@id([ancestorId, descendantId])
+  @@index([ancestorId, depth])
+  @@index([descendantId, depth])
+}
+
+model Participation {
+  id          String              @id @default(uuid()) @db.Uuid
+  userId      String              @db.Uuid
+  amount      Decimal             @db.Decimal(36, 18)
+  asset       String              @db.VarChar(12)
+  status      ParticipationStatus @default(PENDING)
+  externalRef String              @unique @db.VarChar(128)
+  effectiveAt DateTime?
+  createdAt   DateTime            @default(now())
+  user        User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  principalXp PrincipalXpEntry?
+  @@index([userId, status])
+}
+
+model PrincipalXpEntry {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  amount          Decimal  @db.Decimal(36, 18)
+  participationId String   @unique @db.Uuid
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  participation   Participation @relation(fields: [participationId], references: [id], onDelete: Restrict)
+  @@index([userId, createdAt])
+}
+
+model RewardEpoch {
+  id        String       @id @default(uuid()) @db.Uuid
+  number    Int          @unique
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime     @default(now())
+  snapshots XpSnapshot[]
+}
+
+model XpSnapshot {
+  id                     String      @id @default(uuid()) @db.Uuid
+  userId                 String      @db.Uuid
+  rewardEpochId          String      @db.Uuid
+  principalXp            Decimal     @db.Decimal(36, 18)
+  dynamicXp              Decimal     @db.Decimal(36, 18)
+  totalXp                Decimal     @db.Decimal(36, 18)
+  directReferralCount    Int
+  unlockedDepth          Int
+  networkPrincipalXp     Decimal     @db.Decimal(36, 18)
+  snapshotAt             DateTime    @default(now())
+  user                    User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  rewardEpoch             RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+  @@unique([userId, rewardEpochId])
+  @@index([rewardEpochId])
+}
+
+model SystemConfigVersion {
+  id           String   @id @default(uuid()) @db.Uuid
+  version      Int      @unique
+  values       Json
+  effectiveAt  DateTime
+  createdBy    String   @db.VarChar(128)
+  createdAt    DateTime @default(now())
+  @@index([effectiveAt])
+}
+
+model RiskFlag {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @db.Uuid
+  reason    String         @db.VarChar(128)
+  evidence  Json
+  score     Decimal        @db.Decimal(8, 4)
+  status    RiskFlagStatus @default(OPEN)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([userId, status])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String?  @db.Uuid
+  action    String   @db.VarChar(128)
+  target    String   @db.VarChar(256)
+  before    Json?
+  after     Json?
+  ipHash    String?  @db.VarChar(64)
+  requestId String   @db.VarChar(64)
+  createdAt DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@index([requestId])
+}

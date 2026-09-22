@@ -1,0 +1,10 @@
+node_modules
+.turbo
+dist
+coverage
+.env
+.env.local
+packages/database/generated
+*.log
+.DS_Store
+.pnpm-store
