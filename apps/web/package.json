@@ -1,0 +1,50 @@
+{
+  "name": "@xgou/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build --webpack",
+    "start": "next start --port 3000",
+    "lint": "eslint src next.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:integration": "vitest run src/test/routes.integration.spec.tsx"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "latest",
+    "@react-three/drei": "latest",
+    "@react-three/fiber": "latest",
+    "@tanstack/react-query": "latest",
+    "class-variance-authority": "latest",
+    "clsx": "latest",
+    "decimal.js": "latest",
+    "framer-motion": "latest",
+    "lucide-react": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "recharts": "latest",
+    "tailwind-merge": "latest",
+    "three": "latest",
+    "viem": "latest",
+    "wagmi": "latest"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "latest",
+    "@testing-library/react": "latest",
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/three": "latest",
+    "@vitejs/plugin-react": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "jsdom": "latest",
+    "tailwindcss": "latest",
+    "typescript": "6.0.2",
+    "vitest": "latest"
+  }
+}

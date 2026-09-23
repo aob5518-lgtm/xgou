@@ -1,0 +1,4 @@
+import { formatNumber } from '@/lib/finance';
+export function XpCard({ total, principal, dynamic, depth }: { readonly total: number; readonly principal: number; readonly dynamic: number; readonly depth: number }) {
+  return <div className="glass rounded-2xl p-6"><p className="eyebrow">TOTAL XP</p><p className="mt-6 text-4xl font-light">{formatNumber(total, 0)} <span className="text-xs text-white/35">XP</span></p><div className="mt-6 space-y-3 text-xs"><div className="flex justify-between"><span className="text-white/35">Principal XP</span><span>{formatNumber(principal, 0)}</span></div><div className="flex justify-between"><span className="text-white/35">Dynamic XP</span><span>{formatNumber(dynamic, 0)}</span></div><div className="flex justify-between"><span className="text-white/35">Unlocked Network</span><span className="text-[var(--cyan)]">{depth} Levels</span></div></div></div>;
+}

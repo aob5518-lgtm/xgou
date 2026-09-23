@@ -43,3 +43,9 @@ Bull, Spot and Futures are not labels on a shared account. Account types, domain
 ## ADR-011 — Deposit intent is not deposit confirmation
 
 The authenticated user may create an idempotent deposit intent, but cannot confirm it. Confirmation will be produced by the Phase 2B chain/finality adapter. Only a confirmed deposit can enter the internal allocation service.
+
+## ADR-012 — Frontend preview is provider-driven and safe by construction
+
+Phase 2.5 uses a typed `XgouDataProvider` with Demo as the default implementation. Financial preview math uses Decimal. Wallet connection is address display only; the web application exposes no transaction-writing path.
+
+This allows product experience review and Vercel deployment while Arc contracts, authenticated read APIs, execution adapters and real settlement remain unavailable. A polished preview must never be mistaken for live financial infrastructure.

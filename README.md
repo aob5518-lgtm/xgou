@@ -1,6 +1,6 @@
 # XGOU Core Platform
 
-XGOU（小狗）是面向 Crypto 市场周期的资产配置、策略交易与 XP 收益权重平台。本仓库采用 `pnpm + Turborepo`，当前完成 Phase 1 与 Phase 2A：身份与 XP 网络、资金域模型、50/30/20 分配和双重记账 Ledger。所有资金环境默认并将持续保持 Local / Testnet / Sandbox / Paper Trading，任何真实场所或真实私钥必须通过后续 Adapter 接入。
+XGOU（小狗）是面向 Crypto 市场周期的资产配置、策略交易与 XP 收益权重平台。本仓库采用 `pnpm + Turborepo`，当前完成 Phase 1、Phase 2A 与 Phase 2.5 Frontend Preview：身份与 XP 网络、资金域模型、50/30/20 分配、双重记账 Ledger 和不依赖后端的高保真 Demo 前端。所有资金环境默认并将持续保持 Local / Testnet / Sandbox / Paper Trading，任何真实场所或真实私钥必须通过后续 Adapter 接入。
 
 ## Phase 1 已实现
 
@@ -25,10 +25,19 @@ XGOU（小狗）是面向 Crypto 市场周期的资产配置、策略交易与 X
 - Deposit intent API：`POST/GET /v1/funds/deposits`。链上确认与 50/30/20 入账由内部服务执行，不能由用户伪造确认。
 - `ReferralService.tree()` 已改为读取版本化 `maxReferralDepth`，不再硬编码 30。
 
+## Frontend Preview
+
+- `apps/web` 是 Next.js App Router + TypeScript + Tailwind CSS 的独立产品预览，包含 Landing、Dashboard、Bull Fund、Agent、Rewards、XP Network、Activity、Join 与 Settings。
+- XGOU Brain 使用 Three.js / React Three Fiber 粒子系统；支持 reduced motion、移动端低粒子模式及无 WebGL fallback。
+- Demo Data 经 `XgouDataProvider` 注入，UI 不感知 Demo/API 数据来源。
+- Wallet Connect 仅显示地址；不发送 Approve、Deposit、Withdraw 或任何真实交易。
+- Join 50/30/20 和 Reward 5% fee 使用 `decimal.js`，每页均显示 Demo 安全标识。
+
 ## Monorepo
 
 ```text
 apps/api                   NestJS REST API
+apps/web                   Next.js XGOU frontend preview
 packages/database          Prisma schema, migration, seed and client factory
 packages/referral-engine   Referral graph invariants and closure planning
 packages/xp-engine         Principal/Dynamic/Total XP calculations
@@ -54,6 +63,36 @@ pnpm --filter @xgou/api dev
 ```
 
 API 默认监听 `http://localhost:3001/v1`。健康检查为 `GET /v1/health`。
+
+### Local Frontend Setup
+
+Frontend Preview 默认完全离线使用 Demo Data，不要求 PostgreSQL、API 或链上合约：
+
+```bash
+cp apps/web/.env.example apps/web/.env.local
+pnpm install
+pnpm --filter @xgou/web dev
+```
+
+打开 `http://localhost:3000`。使用 `pnpm dev` 可同时启动 Web `:3000` 和 API `:3001`（API 功能需本地数据库）。
+
+## Demo Mode
+
+`NEXT_PUBLIC_DEMO_MODE=true` 是 Preview 默认值。所有 `NEXT_PUBLIC_*` 变量只包含公开配置，不允许 secret。Demo 不会发送资产、token approval、合约调用或 CEX 命令。
+
+## Vercel Deployment
+
+推荐用 repository root 导入 `aob5518-lgtm/xgou`：
+
+- Root Directory: repository root
+- Framework Preset: Next.js
+- Install Command: `pnpm install --frozen-lockfile`
+- Build Command: `pnpm --filter @xgou/web build`
+- Output Directory: Next.js default（留空）
+- Node.js: 22
+- Environment: 按 `apps/web/.env.example` 配置四个公开变量
+
+选择 repository root 能保持 pnpm workspace lockfile 和 Turborepo 行为一致。
 
 ## Authentication API
 
@@ -110,4 +149,4 @@ pnpm test:integration
 - 运行迁移审查、依赖审计、SAST/DAST、渗透测试和灾备演练。
 - 所有资产动作必须双重记账、幂等并经 reconciliation；任何真实资金上线前必须完成独立合约与账务审计。
 
-完整拓扑见 [Architecture](docs/architecture.md)、[Fund Architecture](docs/fund-architecture.md) 和 [Ledger](docs/ledger.md)，工程取舍见 [Decisions](docs/decisions.md)。
+完整拓扑见 [Architecture](docs/architecture.md)、[Fund Architecture](docs/fund-architecture.md)、[Ledger](docs/ledger.md) 和 [Frontend](docs/frontend.md)，工程取舍见 [Decisions](docs/decisions.md)。

@@ -1,0 +1,5 @@
+import type { Position } from '@/lib/demo-data';
+import { formatNumber, formatUsd } from '@/lib/finance';
+export function PositionTable({ positions }: { readonly positions: readonly Position[] }) {
+  return <div className="glass overflow-hidden rounded-2xl"><div className="p-5"><p className="eyebrow">ACTIVE POSITIONS · DEMO</p></div><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead className="border-y border-[var(--border)] text-white/35"><tr>{['ASSET','ENTRY','CURRENT','PNL','ALLOCATION'].map((head) => <th key={head} className="px-5 py-3 font-normal">{head}</th>)}</tr></thead><tbody>{positions.map((position) => <tr key={position.symbol} className="border-b border-white/[.04]"><td className="px-5 py-4 font-semibold">{position.symbol}</td><td className="px-5 py-4 text-white/55">{formatUsd(position.entry)}</td><td className="px-5 py-4">{formatUsd(position.current)}</td><td className="px-5 py-4 text-[var(--success)]">+{formatNumber(position.pnlPercent)}%</td><td className="px-5 py-4">{position.allocation}%</td></tr>)}</tbody></table></div></div>;
+}

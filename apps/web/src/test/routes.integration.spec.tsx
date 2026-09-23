@@ -1,0 +1,23 @@
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import JoinPage from '@/app/(app)/join/page';
+import SettingsPage from '@/app/(app)/settings/page';
+import { appRoutes } from '@/components/layout/AppShell';
+
+describe('product routes', () => {
+  it('declares every required application route', () => {
+    expect(appRoutes.map((route) => route.href)).toEqual([
+      '/dashboard', '/bull-fund', '/agent', '/rewards', '/xp', '/activity', '/join', '/settings',
+    ]);
+  });
+
+  it('renders Join and Settings routes without backend data', () => {
+    const { unmount } = render(<JoinPage />);
+    expect(screen.getByText('Join XGOU')).toBeInTheDocument();
+    expect(screen.getByLabelText('Participation Amount')).toHaveValue('10000');
+    unmount();
+    render(<SettingsPage />);
+    expect(screen.getByText('Settings')).toBeInTheDocument();
+    expect(screen.getByText('ENABLED · LOCKED')).toBeInTheDocument();
+  });
+});

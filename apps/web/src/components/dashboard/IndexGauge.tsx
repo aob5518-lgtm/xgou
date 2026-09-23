@@ -1,0 +1,4 @@
+export function IndexGauge({ value, stage }: { readonly value: number; readonly stage: string }) {
+  const angle = Math.max(0, Math.min(100, value)) * 1.8;
+  return <div className="glass rounded-2xl p-6"><p className="eyebrow">XGOU INDEX · 0—100</p><div className="relative mx-auto mt-6 aspect-[2/1] max-w-80 overflow-hidden"><div className="absolute inset-x-0 top-0 aspect-square rounded-full bg-[conic-gradient(from_270deg,var(--red),var(--warning),var(--cyan),var(--blue),transparent_50%)] p-[2px]"><div className="size-full rounded-full bg-[var(--surface)]" /></div><div className="absolute bottom-0 left-1/2 h-[42%] w-px origin-bottom bg-white transition-transform" style={{ transform: `translateX(-50%) rotate(${String(angle - 90)}deg)` }} /><div className="absolute inset-x-0 bottom-0 text-center"><strong className="text-5xl font-light">{value}</strong><p className="mt-1 text-[10px] tracking-[.18em] text-[var(--cyan)]">{stage}</p></div></div></div>;
+}

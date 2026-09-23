@@ -1,0 +1,4 @@
+import { MetricCard } from '@/components/dashboard/MetricCard';
+export function StrategyCard({ name, allocation, tone, metrics }: { readonly name: string; readonly allocation: string; readonly tone: 'cyan' | 'blue'; readonly metrics: readonly { label: string; value: string }[] }) {
+  return <section className={`glass rounded-2xl p-6 ${tone === 'cyan' ? 'cyan-glow' : 'blue-glow'}`}><div className="flex items-end justify-between"><div><p className="eyebrow">{name}</p><h2 className="mt-2 text-3xl font-light">{allocation}</h2></div><span className="rounded-full border border-white/10 px-3 py-1 text-[9px] tracking-wider text-[var(--success)]">SYSTEM ONLINE</span></div><div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-3">{metrics.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} className="bg-white/[.015]" />)}</div></section>;
+}

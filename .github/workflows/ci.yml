@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: xgou
+          POSTGRES_PASSWORD: xgou_test_only
+          POSTGRES_DB: xgou
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U xgou"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      CI: true
+      DATABASE_URL: postgresql://xgou:xgou_test_only@localhost:5432/xgou?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: test-access-secret-with-at-least-32-characters
+      JWT_REFRESH_SECRET: test-refresh-secret-with-at-least-32-characters
+      SIWE_DOMAIN: localhost:3000
+      SIWE_URI: http://localhost:3000
+      SIWE_CHAIN_ID: 11155111
+      IP_HASH_SALT: test-only-ip-hash-salt
+      NEXT_PUBLIC_DEMO_MODE: true
+      NEXT_PUBLIC_API_URL: http://localhost:3001/v1
+      NEXT_PUBLIC_APP_ENV: preview
+      NEXT_PUBLIC_NETWORK_NAME: Arc Demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:integration
+      - run: pnpm build
