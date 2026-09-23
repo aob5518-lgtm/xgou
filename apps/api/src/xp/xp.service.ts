@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { SYSTEM_CONFIG_DEFAULTS, systemConfigSchema, type SystemConfig } from '@xgou/shared';
 import { calculateXp } from '@xgou/xp-engine';
 import { Decimal } from 'decimal.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { SystemConfigService } from '../config/system-config.service.js';
 
 export interface XpSummary {
   readonly principalXp: string;
@@ -16,10 +16,13 @@ export interface XpSummary {
 
 @Injectable()
 export class XpService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configs: SystemConfigService,
+  ) {}
 
   async summary(userId: string): Promise<XpSummary> {
-    const config = await this.config();
+    const config = (await this.configs.current()).values;
     const [ownAggregate, ownParticipations, directEdges, closure] = await Promise.all([
       this.prisma.db.principalXpEntry.aggregate({ where: { userId }, _sum: { amount: true } }),
       this.prisma.db.participation.findMany({
@@ -71,18 +74,5 @@ export class XpService {
       unlockedDepth: calculated.unlockedDepth,
       networkPrincipalXp: calculated.networkPrincipalXp.toFixed(),
     };
-  }
-
-  private async config(): Promise<SystemConfig> {
-    const record = await this.prisma.db.systemConfigVersion.findFirst({
-      where: { effectiveAt: { lte: new Date() } },
-      orderBy: { version: 'desc' },
-    });
-    if (!record) return { ...SYSTEM_CONFIG_DEFAULTS };
-    const stored =
-      typeof record.values === 'object' && record.values !== null && !Array.isArray(record.values)
-        ? (record.values as Record<string, unknown>)
-        : {};
-    return systemConfigSchema.parse({ ...SYSTEM_CONFIG_DEFAULTS, ...stored });
   }
 }

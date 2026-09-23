@@ -6,6 +6,10 @@ const migrationPath = new URL(
   '../prisma/migrations/20260921153000_phase1_core/migration.sql',
   import.meta.url,
 );
+const phase2MigrationPath = new URL(
+  '../prisma/migrations/20260922043000_phase2a_fund_ledger/migration.sql',
+  import.meta.url,
+);
 
 describe('Phase 1 database artifacts', () => {
   it('stores asset and XP amounts as Decimal and defines the referral closure identity', async () => {
@@ -20,5 +24,25 @@ describe('Phase 1 database artifacts', () => {
     expect(migration).toContain('ReferralClosure_self_depth_check');
     expect(migration).toContain('Participation_amount_positive');
     expect(migration).toContain('AuditLog_prevent_update_delete');
+  });
+});
+
+describe('Phase 2A fund and ledger database artifacts', () => {
+  it('defines append-only double-entry models without a mutable balance column', async () => {
+    const schema = await readFile(schemaPath, 'utf8');
+    const ledgerAccount = schema.match(/model LedgerAccount \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(schema).toContain('model LedgerTransaction');
+    expect(schema).toContain('model LedgerEntry');
+    expect(schema).toContain('model FundAllocation');
+    expect(ledgerAccount).not.toMatch(/\bbalance\b/);
+  });
+
+  it('enforces balancing, immutability, and fund-domain boundaries in SQL', async () => {
+    const migration = await readFile(phase2MigrationPath, 'utf8');
+    expect(migration).toContain('assert_ledger_transaction_balanced');
+    expect(migration).toContain('LedgerEntry_immutable');
+    expect(migration).toContain('LedgerAccount_identity_immutable');
+    expect(migration).toContain('LedgerAccount_fund_domain_boundary');
+    expect(migration).toContain('FundAllocation_ratio_valid');
   });
 });

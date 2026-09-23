@@ -20,10 +20,26 @@ The inviter is optional until a user's first participation. Afterwards it cannot
 
 Business defaults live in a typed shared contract and are persisted as immutable versions with `effectiveAt`. Future reward epochs will reference the effective config version so historical computation remains replayable.
 
-## ADR-006 — No fake Phase 2+ modules
+## ADR-006 — No fake future-phase modules
 
-Only Phase 1 is implemented in this delivery. Ledger, deposits, contracts, strategies and UI are intentionally absent rather than represented by incomplete interfaces or misleading endpoints. Their target boundaries are documented so later phases can be added without rewriting identity, referrals or XP.
+Only completed phases are exposed. Arc contracts, strategies, risk execution and UI remain absent until their own acceptance gates pass; they are not represented by incomplete endpoints.
 
 ## ADR-007 — Toolchain compatibility
 
 TypeScript is pinned to the newest stable major supported by the strict `typescript-eslint` toolchain used here. Prisma is pinned to stable 7.10 instead of a prerelease major. Exact resolution remains reproducible through `pnpm-lock.yaml`.
+
+## ADR-008 — 50/30/20 is a versioned, exact invariant
+
+Bull/Spot/Futures allocation ratios are Decimal strings and must sum to exactly `1.00`. The System Config schema, allocation engine and tests all reject under-allocation and over-allocation. Each FundAllocation stores the config version used at posting time.
+
+## ADR-009 — LedgerEntry is the balance source of truth
+
+Accounts intentionally contain no mutable balance column. A deposit confirmation and its fund allocation are separate balanced journals. PostgreSQL deferred triggers validate debit equals credit per asset at commit, and posted transactions/entries are append-only. Corrections use explicit reversal transactions.
+
+## ADR-010 — Fund domains are structural permissions
+
+Bull, Spot and Futures are not labels on a shared account. Account types, domain fields, seed provisioning, journal construction and SQL constraints agree on the allowed domain. Cross-domain transfers require a future audited Treasury Rebalance workflow and cannot be initiated by a strategy agent.
+
+## ADR-011 — Deposit intent is not deposit confirmation
+
+The authenticated user may create an idempotent deposit intent, but cannot confirm it. Confirmation will be produced by the Phase 2B chain/finality adapter. Only a confirmed deposit can enter the internal allocation service.

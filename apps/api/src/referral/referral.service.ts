@@ -3,10 +3,14 @@ import { planReferralBinding, ReferralBindingError } from '@xgou/referral-engine
 import { getAddress } from 'viem';
 import { PrismaService } from '../database/prisma.service.js';
 import type { AuditContext } from '../common/audit-context.js';
+import { SystemConfigService } from '../config/system-config.service.js';
 
 @Injectable()
 export class ReferralService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configs: SystemConfigService,
+  ) {}
 
   async bind(userId: string, inviterWalletAddress: string, audit: AuditContext): Promise<{ inviterUserId: string }> {
     const normalized = getAddress(inviterWalletAddress.toLowerCase()).toLowerCase();
@@ -50,8 +54,9 @@ export class ReferralService {
   }
 
   async tree(userId: string): Promise<readonly { userId: string; walletAddress: string; depth: number }[]> {
+    const maxReferralDepth = (await this.configs.current()).values.maxReferralDepth;
     const rows = await this.prisma.db.referralClosure.findMany({
-      where: { ancestorId: userId, depth: { gte: 1, lte: 30 } },
+      where: { ancestorId: userId, depth: { gte: 1, lte: maxReferralDepth } },
       include: { descendant: { select: { walletAddress: true } } },
       orderBy: [{ depth: 'asc' }, { createdAt: 'asc' }],
     });

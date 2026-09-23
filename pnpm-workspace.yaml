@@ -3,11 +3,11 @@ packages:
   - packages/*
 
 allowBuilds:
-  '@prisma/engines': set this to true or false
-  esbuild: set this to true or false
-  msgpackr-extract: set this to true or false
-  prisma: set this to true or false
-  workerd: set this to true or false
+  '@prisma/engines': true
+  esbuild: true
+  msgpackr-extract: false
+  prisma: true
+  workerd: false
 
 onlyBuiltDependencies:
   - '@prisma/client'

@@ -27,6 +27,84 @@ enum RiskFlagStatus {
   DISMISSED
 }
 
+enum FundDomain {
+  BULL
+  SPOT
+  FUTURES
+  REWARD
+  WITHDRAWAL
+  ECOSYSTEM
+  PLATFORM
+}
+
+enum LedgerAccountType {
+  DEPOSIT_CLEARING
+  USER_PRINCIPAL
+  BULL_VAULT
+  SPOT_TREASURY
+  SPOT_STRATEGY
+  FUTURES_TREASURY
+  FUTURES_STRATEGY
+  REWARD_VAULT
+  REWARD_PAYABLE
+  WITHDRAWAL_BUFFER
+  ECOSYSTEM_FUND
+  PLATFORM_TREASURY
+  FEE_EXPENSE
+  TRADING_PNL
+  FUNDING_EXPENSE
+}
+
+enum LedgerSide {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerTransactionKind {
+  DEPOSIT_CONFIRMATION
+  FUND_ALLOCATION
+  TREASURY_REBALANCE
+  MANUAL_ADJUSTMENT
+  REVERSAL
+}
+
+enum DepositStatus {
+  CREATED
+  PENDING_CHAIN
+  CONFIRMED
+  ALLOCATING
+  COMPLETED
+  FAILED
+}
+
+enum FundAllocationStatus {
+  PENDING
+  POSTED
+  REVERSED
+}
+
+enum AccountStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum VaultKind {
+  BULL_MASTER
+  SPOT_STRATEGY
+  FUTURES_STRATEGY
+  REWARD
+  ECOSYSTEM
+}
+
+enum TreasuryAccountKind {
+  DEPOSIT_CLEARING
+  SPOT_STRATEGY
+  FUTURES_STRATEGY
+  WITHDRAWAL_BUFFER
+  PLATFORM_OPERATING
+}
+
 model User {
   id                  String               @id @default(uuid()) @db.Uuid
   walletAddress       String               @unique @db.VarChar(42)
@@ -45,6 +123,8 @@ model User {
   principalXpEntries   PrincipalXpEntry[]
   xpSnapshots          XpSnapshot[]
   riskFlags            RiskFlag[]
+  deposits             Deposit[]
+  ledgerAccounts       LedgerAccount[]
 }
 
 model AuthNonce {
@@ -149,7 +229,124 @@ model SystemConfigVersion {
   effectiveAt  DateTime
   createdBy    String   @db.VarChar(128)
   createdAt    DateTime @default(now())
+  fundAllocations FundAllocation[]
   @@index([effectiveAt])
+}
+
+model LedgerAccount {
+  id            String            @id @default(uuid()) @db.Uuid
+  code          String            @unique @db.VarChar(128)
+  type          LedgerAccountType
+  fundDomain    FundDomain?
+  ownerUserId   String?           @db.Uuid
+  asset         String            @db.VarChar(12)
+  status        AccountStatus     @default(ACTIVE)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  ownerUser     User?             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  entries       LedgerEntry[]
+  vault         Vault?
+  treasury      TreasuryAccount?
+  @@index([type, asset])
+  @@index([fundDomain, status])
+  @@index([ownerUserId, type])
+}
+
+model LedgerTransaction {
+  id             String                @id @default(uuid()) @db.Uuid
+  kind           LedgerTransactionKind
+  idempotencyKey String                @unique @db.VarChar(128)
+  referenceType  String                @db.VarChar(64)
+  referenceId    String                @db.VarChar(128)
+  description    String                @db.VarChar(512)
+  effectiveAt    DateTime
+  createdAt      DateTime              @default(now())
+  entries         LedgerEntry[]
+  @@index([referenceType, referenceId])
+  @@index([effectiveAt])
+}
+
+model LedgerEntry {
+  id            String            @id @default(uuid()) @db.Uuid
+  transactionId String            @db.Uuid
+  accountId     String            @db.Uuid
+  side          LedgerSide
+  amount        Decimal           @db.Decimal(36, 18)
+  asset         String            @db.VarChar(12)
+  fundDomain    FundDomain?
+  memo          String?           @db.VarChar(256)
+  createdAt     DateTime          @default(now())
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  account       LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  @@index([accountId, createdAt])
+  @@index([transactionId])
+  @@index([fundDomain, asset])
+}
+
+model Deposit {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @db.Uuid
+  asset          String        @db.VarChar(12)
+  amount         Decimal       @db.Decimal(36, 18)
+  chainId        String        @db.VarChar(64)
+  tokenDecimals  Int
+  externalRef    String        @unique @db.VarChar(160)
+  idempotencyKey String        @unique @db.VarChar(128)
+  status         DepositStatus @default(CREATED)
+  confirmedAt    DateTime?
+  allocatedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  allocations    FundAllocation[]
+  @@index([userId, status])
+  @@index([status, createdAt])
+}
+
+model FundAllocation {
+  id             String               @id @default(uuid()) @db.Uuid
+  depositId      String               @db.Uuid
+  fundDomain     FundDomain
+  amount         Decimal              @db.Decimal(36, 18)
+  ratio          Decimal              @db.Decimal(36, 18)
+  configVersion  Int
+  status         FundAllocationStatus @default(PENDING)
+  ledgerReference String              @db.VarChar(128)
+  createdAt      DateTime             @default(now())
+  postedAt       DateTime?
+  deposit        Deposit              @relation(fields: [depositId], references: [id], onDelete: Restrict)
+  config         SystemConfigVersion  @relation(fields: [configVersion], references: [version], onDelete: Restrict)
+  @@unique([depositId, fundDomain])
+  @@index([fundDomain, status])
+  @@index([configVersion])
+}
+
+model Vault {
+  id              String        @id @default(uuid()) @db.Uuid
+  code            String        @unique @db.VarChar(128)
+  kind            VaultKind
+  fundDomain      FundDomain
+  asset           String        @db.VarChar(12)
+  ledgerAccountId String        @unique @db.Uuid
+  status          AccountStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  ledgerAccount   LedgerAccount @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  @@index([fundDomain, status])
+}
+
+model TreasuryAccount {
+  id              String              @id @default(uuid()) @db.Uuid
+  code            String              @unique @db.VarChar(128)
+  kind            TreasuryAccountKind
+  fundDomain      FundDomain?
+  asset           String              @db.VarChar(12)
+  ledgerAccountId String              @unique @db.Uuid
+  status          AccountStatus       @default(ACTIVE)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  ledgerAccount   LedgerAccount       @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  @@index([fundDomain, status])
 }
 
 model RiskFlag {

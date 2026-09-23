@@ -1,62 +1,76 @@
 # XGOU Architecture
 
-## Target fund flow
+## Target fund and reward flow
 
 ```mermaid
 flowchart TD
-  U[User] --> DR[Deposit Router]
-  DR -->|50%| BV[Bull Master Vault]
-  DR -->|50%| AV[Agent Master Vault]
-  AV --> LR[Liquidity Reserve]
-  AV --> PA[Strategy Pod A]
-  AV --> PB[Strategy Pod B]
-  AV --> PC[Strategy Pod C]
-  PA --> CA[CEX Subaccount A]
-  PB --> CB[CEX Subaccount B]
-  PC --> OW[Onchain Smart Account / MPC Wallet]
-  CA --> PNL[Realized Net PnL]
-  CB --> PNL
-  OW --> PNL
-  PNL --> WR[Weekly Reward Pool / Reward Vault]
-  WR --> XP[XP Snapshot Distribution]
-  XP --> RB[Reward Balance]
-  RB --> WB[Withdrawal Buffer]
+  U[User] --> ADR[Arc Deposit Router]
+  ADR --> DC[Deposit Clearing]
+  DC -->|50%| BV[Bull Master Vault]
+  DC -->|30%| ST[Spot Strategy Treasury]
+  DC -->|20%| FT[Futures Strategy Treasury]
+
+  BV --> BP[Bull Portfolio]
+  ST --> SR[Spot Reserve]
+  ST --> SP[Spot Strategy Pods]
+  SP --> SA[Spot CEX Subaccounts / Onchain DEX]
+  FT --> FR[Futures Reserve]
+  FT --> FP[Futures Trend Pods]
+  FP --> FA[Futures CEX Subaccounts]
+
+  SA --> SPNL[Spot Realized Net PnL]
+  FA --> FPNL[Futures Realized Net PnL]
+  SPNL --> GNAV[Global Agent NAV]
+  FPNL --> GNAV
+  GNAV --> HWM[High Water Mark]
+  HWM --> LC[Loss Carryforward]
+  LC --> DP[Distributable Profit]
+  DP --> RPV[Weekly Reward Pool / Reward Vault]
+  RPV --> XP[XP Snapshot]
+  XP --> UR[User Reward]
+  UR --> WB[Withdrawal Buffer]
   WB -->|95% default| USER[User]
-  WB -->|5% configurable| EF[Ecosystem Vault]
+  WB -->|5% configurable| EV[Ecosystem Vault]
+
   PT[Platform Operating Treasury]:::isolated
+  BV -. no automatic transfer .- ST
+  ST -. no automatic transfer .- FT
   BV -. strictly isolated .- PT
-  AV -. strictly isolated .- PT
+  ST -. strictly isolated .- PT
+  FT -. strictly isolated .- PT
   classDef isolated fill:#541c1c,stroke:#ff6b6b,color:#fff
 ```
 
-Platform Operating Treasury 与 User Bull Assets、User Agent Assets、Strategy Pods、Reward Vault、Withdrawal Buffer 和 Ecosystem Vault 在法律实体、账户、账本与权限上均须隔离。上图是目标架构；Phase 1 只实现下面的 identity/referral/XP control plane。
+Platform Treasury 与 Bull、Spot、Futures、Reward、Withdrawal Buffer、Ecosystem 资金域完全隔离。交易 Agent 只能提交 proposal；Treasury allocation、withdrawal 和跨域 rebalance 不属于 Agent 权限。
 
-## Phase 1 runtime
+## Current Phase 2A runtime
 
 ```mermaid
 flowchart LR
-  W[Wallet] -->|EIP-4361 signature| A[NestJS API]
-  A --> N[Nonce + Rotating Sessions]
-  A --> R[Referral Service]
-  R --> C[(Referral Closure Table)]
-  A --> X[XP Service]
-  X --> E[Decimal XP Engine]
-  C --> X
-  X --> P[(Principal XP Entries)]
-  A --> L[(Append-only Audit Log)]
-  N --> DB[(PostgreSQL)]
-  C --> DB
-  P --> DB
+  W[Wallet / SIWE] --> A[NestJS API]
+  A --> D[Deposit Intent]
+  C[Confirmed Deposit Event] --> F[Fund Allocation Service]
+  CFG[Versioned System Config] -->|50 / 30 / 20| F
+  F --> LJ[Double-entry Journal Builder]
+  LJ --> LT[(LedgerTransaction)]
+  LT --> LE[(Immutable LedgerEntry)]
+  LE --> BA[Balance Reconstruction]
+  F --> FA[(FundAllocation Snapshot)]
+  F --> P[(Participation + Principal XP)]
+  A --> R[Referral / XP Services]
+  CFG --> R
+  A --> AL[(Append-only Audit Log)]
 ```
 
 ### Boundaries
 
-- Controllers validate transport input and authenticate callers; domain rules stay in engine/service packages.
-- PostgreSQL is the source of truth. Redis is reserved for queues, locks, rate limit and cache—not balances.
-- Referral writes are serializable. The closure table stores self rows at depth 0 and ancestors at positive depth.
-- XP queries aggregate immutable Principal XP entries. Dynamic XP is calculated once from qualifying depths and is never recursively reused.
-- Versioned `SystemConfigVersion` rows make every threshold and rate reproducible for future epoch snapshots.
+- PostgreSQL LedgerEntry 是余额事实来源；Redis 不保存最终余额。
+- 一笔确认入金生成 `DEPOSIT_CONFIRMATION` 和 `FUND_ALLOCATION` 两个平衡 Journal。
+- Bull、Spot、Futures 账户类型与 `fundDomain` 在领域层和数据库约束层同时校验。
+- 用户只能创建 Deposit intent，不能自行把状态改为 confirmed 或触发伪造链上入账。
+- 所有分配保存生效的 System Config version，以便审计、重放与争议处理。
+- XP 规则保持 Phase 1 原样；有效入金完成分配后才生成 Participation 与 Principal XP。
 
-## Planned module boundary
+## Planned boundaries
 
-Future phases add `ledger`, `contracts`, `risk-engine`, `strategy-engine`, `exchange-adapters`, `wallet-adapters`, `agent-core`, `worker`, `web` and `admin` as separate packages/apps. External exchanges, chains, wallets and AI providers enter only through interfaces; sandbox adapters remain the default until an explicit production readiness gate is satisfied.
+Phase 2B 增加 Arc Chain Registry、finality adapter 和 Vault contracts。Phase 3 增加隔离的 Spot/Futures Paper accounts、risk engine 和 execution adapters。Phase 4 增加 NAV、High Water Mark、Loss Carryforward、Reward Pool 和提现费。未完成模块不会用占位接口伪装成可用功能。

@@ -1,6 +1,6 @@
 # XGOU Core Platform
 
-XGOU（小狗）是面向 Crypto 市场周期的资产配置、策略交易与 XP 收益权重平台。本仓库采用 `pnpm + Turborepo`，当前完成 Phase 1：PostgreSQL 数据模型、SIWE 用户认证、推荐关系和 XP 领域引擎。所有资金环境默认并将持续保持 Testnet / Sandbox / Paper Trading，任何真实场所或真实私钥必须通过后续 Adapter 接入。
+XGOU（小狗）是面向 Crypto 市场周期的资产配置、策略交易与 XP 收益权重平台。本仓库采用 `pnpm + Turborepo`，当前完成 Phase 1 与 Phase 2A：身份与 XP 网络、资金域模型、50/30/20 分配和双重记账 Ledger。所有资金环境默认并将持续保持 Local / Testnet / Sandbox / Paper Trading，任何真实场所或真实私钥必须通过后续 Adapter 接入。
 
 ## Phase 1 已实现
 
@@ -13,6 +13,18 @@ XGOU（小狗）是面向 Crypto 市场周期的资产配置、策略交易与 X
 - 可版本化系统参数：有效邀请门槛、最大层级、XP 汇率和动态 XP 比例。
 - 100 用户幂等 seed；核心单元及跨包集成测试覆盖 31 层边界。
 
+## Phase 2A 已实现
+
+- 正式资金模型：50% Bull Master Vault、30% Spot Strategy Treasury、20% Futures Strategy Treasury。
+- `@xgou/ledger` Money Value Object；金额采用 Decimal，账本统一 18 位精度，Token decimals 单独保存。
+- Deposit、FundAllocation、LedgerAccount、LedgerTransaction、LedgerEntry、Vault、TreasuryAccount 数据模型。
+- Deposit Confirmation 和 Fund Allocation 分成两笔各自平衡的双分录 Journal。
+- Ledger transaction/entry append-only；修正使用新 reversal transaction，不允许覆盖历史。
+- PostgreSQL deferred constraint trigger 在提交时按资产验证借贷平衡，并验证 account asset/fund domain。
+- 账本账户不保存可随意修改的 balance；余额由 LedgerEntry 重建。
+- Deposit intent API：`POST/GET /v1/funds/deposits`。链上确认与 50/30/20 入账由内部服务执行，不能由用户伪造确认。
+- `ReferralService.tree()` 已改为读取版本化 `maxReferralDepth`，不再硬编码 30。
+
 ## Monorepo
 
 ```text
@@ -20,11 +32,12 @@ apps/api                   NestJS REST API
 packages/database          Prisma schema, migration, seed and client factory
 packages/referral-engine   Referral graph invariants and closure planning
 packages/xp-engine         Principal/Dynamic/Total XP calculations
+packages/ledger            Money, fund allocation and double-entry invariants
 packages/shared            Runtime validation and shared configuration contracts
 docs                       Architecture, decisions and security notes
 ```
 
-后续 Phase 会按需求顺序加入 ledger、vault、paper strategies、reward settlement、Bull Fund、Web/Admin 和 XGOU Brain；未完成阶段没有用假接口伪装为已完成能力。
+后续 Phase 会按顺序加入 Arc Chain Registry 与 Vault contracts、Paper Spot/Futures、risk engine、reward settlement、Web/Admin 和 XGOU Brain；未完成阶段没有用假接口伪装为已完成能力。
 
 ## Local setup
 
@@ -50,11 +63,11 @@ API 默认监听 `http://localhost:3001/v1`。健康检查为 `GET /v1/health`�
 4. 后续业务请求使用 `Authorization: Bearer <accessToken>`。
 5. `POST /v1/auth/refresh` 和 `/logout` 同时发送 refresh cookie 与 `x-csrf-token` header。
 
-推荐接口为 `POST /v1/referrals/bind`、`GET /v1/referrals/tree`；XP 摘要为 `GET /v1/xp/me`。
+推荐接口为 `POST /v1/referrals/bind`、`GET /v1/referrals/tree`；XP 摘要为 `GET /v1/xp/me`；资金参与意图接口为 `POST/GET /v1/funds/deposits`。
 
 ## Environment variables
 
-`.env.example` 是完整的 Phase 1 清单。JWT secret 与 IP hash salt 必须由部署环境秘密管理器提供；仓库不包含真实 key。`DATABASE_URL` 是 PostgreSQL 的唯一账务数据源连接。Redis 已编排但在 Phase 1 不作为用户或 XP 的最终数据源。
+`.env.example` 是当前运行环境清单。JWT secret 与 IP hash salt 必须由部署环境秘密管理器提供；仓库不包含真实 key。`DATABASE_URL` 是 PostgreSQL 的唯一账务数据源连接。Redis 已编排但绝不是余额或账本最终数据源。
 
 ## Database migration and seed
 
@@ -64,7 +77,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-首个迁移还增加 Prisma schema 无法表达的约束：闭包深度/自关系、正数参与金额，以及阻止更新和删除 AuditLog 的数据库触发器。
+迁移包含 Prisma schema 无法表达的约束：闭包深度/自关系、正数金额、Ledger 借贷平衡、资金域隔离，以及阻止更新或删除 AuditLog 与已入账 Ledger 的数据库触发器。
 
 ## Testing
 
@@ -75,7 +88,7 @@ pnpm test
 pnpm test:integration
 ```
 
-测试重点包括 1 个有效直推解锁 3 层、10 个封顶 30 层、第 31 层不计入 Dynamic XP、只用 Principal XP、推荐循环防护和永久绑定。
+测试重点包括原有 XP/推荐规则，以及 10,000 USDC → 5,000/3,000/2,000、配置必须合计 1.00、Journal 平衡、精度余数守恒、余额重建和跨资金域拒绝。
 
 ## Security model
 
@@ -95,6 +108,6 @@ pnpm test:integration
 - 从 secrets manager 注入所有 secret，配置轮换和不同环境的 IP hash salt。
 - 在可信代理后正确配置客户端 IP，并限制 `WEB_ORIGIN`。
 - 运行迁移审查、依赖审计、SAST/DAST、渗透测试和灾备演练。
-- Phase 2 起所有资产动作必须双重记账、幂等并经 reconciliation；任何真实资金上线前必须完成独立合约与账务审计。
+- 所有资产动作必须双重记账、幂等并经 reconciliation；任何真实资金上线前必须完成独立合约与账务审计。
 
-完整拓扑见 [Architecture](docs/architecture.md)，工程取舍见 [Decisions](docs/decisions.md)。
+完整拓扑见 [Architecture](docs/architecture.md)、[Fund Architecture](docs/fund-architecture.md) 和 [Ledger](docs/ledger.md)，工程取舍见 [Decisions](docs/decisions.md)。

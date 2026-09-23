@@ -1,5 +1,5 @@
 {
-  "name": "@xgou/shared",
+  "name": "@xgou/ledger",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,11 +8,11 @@
   "exports": { ".": { "types": "./src/index.ts", "default": "./dist/index.js" } },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "lint": "eslint src",
+    "lint": "eslint src test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
-    "test:integration": "vitest run test --passWithNoTests"
+    "test:integration": "vitest run test"
   },
-  "dependencies": { "decimal.js": "latest", "zod": "latest" },
+  "dependencies": { "decimal.js": "latest" },
   "devDependencies": { "vitest": "latest" }
 }
