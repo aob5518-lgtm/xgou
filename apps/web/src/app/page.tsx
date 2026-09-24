@@ -18,13 +18,13 @@ export default function LandingPage() {
   return <main className="grid-noise overflow-hidden">
     <section className="relative flex min-h-screen flex-col px-5 py-6 md:px-10">
       <nav className="relative z-10 flex items-center justify-between"><Logo /><div className="flex items-center gap-3"><Link href="/dashboard" className="hidden text-[10px] tracking-[.18em] text-white/55 sm:block">ENTER APP</Link><WalletButton /></div></nav>
-      <div className="relative z-10 mx-auto mt-14 w-full max-w-6xl text-center">
+      <div className="relative z-10 mx-auto mt-10 w-full max-w-[760px] text-center md:mt-12">
         <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="eyebrow">AI CRYPTO CYCLE INTELLIGENCE · PREVIEW</motion.p>
-        <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }} className="display mt-5 text-gradient">XGOU</motion.h1>
-        <p className="mt-5 text-sm tracking-[.16em] text-white/65 md:text-base">AI 驱动的加密周期资产管理系统</p>
+        <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }} className="display mt-4 text-gradient">XGOU</motion.h1>
+        <p className="mt-4 text-sm tracking-[.06em] text-white/65 md:text-base">AI 驱动的加密周期资产管理系统</p>
       </div>
-      <div className="relative mx-auto -mt-3 w-full max-w-5xl flex-1"><XgouBrain /></div>
-      <div className="relative z-10 mx-auto -mt-5 max-w-2xl text-center"><p className="text-sm leading-7 text-white/45">牛市基金捕捉周期，现货 Agent 捕捉波动，趋势 Agent 捕捉趋势。</p><div className="mt-6 flex flex-wrap justify-center gap-3"><Button asChild><Link href="/dashboard">START XGOU <ArrowRight size={14} /></Link></Button><Button asChild variant="outline"><Link href="#system">EXPLORE SYSTEM <ArrowDown size={14} /></Link></Button></div><p className="mt-7 text-[9px] tracking-[.24em] text-white/25">BUILT FOR THE NEXT CRYPTO CYCLE.</p></div>
+      <div className="relative mx-auto -mt-8 w-full max-w-6xl flex-1"><XgouBrain /></div>
+      <div className="relative z-10 mx-auto -mt-7 max-w-2xl text-center"><p className="text-sm leading-7 text-white/55">你负责参与，Agent 负责执行。</p><div className="mt-5 flex flex-wrap justify-center gap-3"><Button asChild><Link href="/dashboard">START XGOU <ArrowRight size={14} /></Link></Button><Button asChild variant="outline"><Link href="#system">EXPLORE SYSTEM <ArrowDown size={14} /></Link></Button></div><p className="mt-6 text-[9px] tracking-[.24em] text-white/25">BUILT FOR THE NEXT CRYPTO CYCLE.</p></div>
     </section>
 
     <section id="system" className="mx-auto max-w-7xl px-5 py-32 md:px-10"><p className="eyebrow">CAPITAL ARCHITECTURE</p><h2 className="section-title mt-5 max-w-4xl">ONE CAPITAL.<br /><span className="text-white/30">THREE ENGINES.</span></h2><div className="mt-16 grid gap-4 md:grid-cols-3">{engines.map((engine, index) => <motion.article key={engine.name} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * .12 }} className="glass min-h-72 rounded-2xl p-6"><span className="block h-px w-12" style={{ background: engine.tone }} /><div className="mt-14 flex items-end justify-between"><h3 className="text-xl tracking-tight">{engine.name}</h3><b className="text-4xl font-light" style={{ color: engine.tone }}>{engine.share}</b></div><p className="mt-8 text-sm leading-7 text-white/45">{engine.copy}</p></motion.article>)}</div></section>

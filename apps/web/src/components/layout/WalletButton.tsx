@@ -9,6 +9,6 @@ export function WalletButton() {
   const connectors = useConnectors();
   const { mutate: connect } = useConnect();
   const { mutate: disconnect } = useDisconnect();
-  if (status === 'connected') return <Button variant="outline" onClick={() => { disconnect(); }}><Wallet size={14} />{address.slice(0, 6)}…{address.slice(-4)}</Button>;
-  return <Button variant="outline" onClick={() => { const connector = connectors[0]; if (connector) connect({ connector }); }}><Wallet size={14} />CONNECT WALLET</Button>;
+  if (status === 'connected') return <Button className="h-9 px-3 text-[10px]" variant="outline" onClick={() => { disconnect(); }}><Wallet size={13} />{address.slice(0, 6)}…{address.slice(-4)}</Button>;
+  return <Button className="h-9 px-3 text-[10px]" variant="outline" onClick={() => { const connector = connectors[0]; if (connector) connect({ connector }); }}><Wallet size={13} />CONNECT</Button>;
 }
