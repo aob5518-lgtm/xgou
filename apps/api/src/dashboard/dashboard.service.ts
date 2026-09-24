@@ -13,7 +13,7 @@ export class DashboardService {
 
   async get(userId: string) {
     const chain = getChainConfig(process.env.CHAIN_ENV);
-    const [user, allocations, principalAggregate, latestSnapshot, latestDeposit] = await Promise.all([
+    const [user, allocations, principalAggregate, latestSnapshot, latestDeposit, spotStrategy] = await Promise.all([
       this.prisma.db.user.findUniqueOrThrow({ where: { id: userId } }),
       this.prisma.db.fundAllocation.groupBy({
         by: ['fundDomain'],
@@ -27,6 +27,7 @@ export class DashboardService {
         include: { chainReference: true, allocations: true },
         orderBy: { createdAt: 'desc' },
       }),
+      this.prisma.db.strategy.findUnique({ where: { code: 'SPOT_SWING_V1' }, select: { status: true } }),
     ]);
     const amounts = new Map(allocations.map((item) => [item.fundDomain, new Decimal(item._sum.amount?.toString() ?? 0)]));
     const bull = amounts.get('BULL') ?? new Decimal(0);
@@ -66,7 +67,7 @@ export class DashboardService {
         })),
       } : null,
       dataMode: 'TESTNET_REAL_LEDGER',
-      agentStatus: 'NOT_ACTIVE_YET',
+      agentStatus: spotStrategy?.status ?? 'NOT_ACTIVE_YET',
     };
   }
 }

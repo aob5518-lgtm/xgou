@@ -32,6 +32,9 @@ export const demoData = {
     ] satisfies readonly ChartPoint[],
   },
   agent: {
+    mode: 'PAPER', status: 'PAPER', circuitState: 'RUNNING',
+    allocatedCapital: 7458.13, activeCapital: 5966.5, cashBalance: 2833.13, reserveBalance: 1491.63,
+    realizedPnl: 432.74, unrealizedPnl: 136.2, dailyPnl: 24.18, drawdown: 0.032,
     totalNav: 12430.21,
     spot: { nav: 7458.13, weeklyPnl: 2.41, monthlyPnl: 7.82, cashReserve: 20, exposure: 62, risk: 'MEDIUM' },
     futures: { nav: 4972.08, realizedPnl: 432.74, exposure: 38, leverage: 1.8, marginUsage: 24, drawdown: 3.2, risk: 'CONTROLLED' },
@@ -44,6 +47,10 @@ export const demoData = {
       { label: 'MON', value: 24 }, { label: 'TUE', value: 48 }, { label: 'WED', value: 37 },
       { label: 'THU', value: 84 }, { label: 'FRI', value: 112 }, { label: 'SAT', value: 104 }, { label: 'SUN', value: 136 },
     ] satisfies readonly ChartPoint[],
+    recentTrades: [
+      { id: 'paper-1', symbol: 'BTC/USDC', side: 'BUY', quantity: '0.0162', price: '112680', fee: '1.83', executedAt: '2026-09-25T02:38:22.000Z', mode: 'PAPER' },
+      { id: 'paper-2', symbol: 'ETH/USDC', side: 'BUY', quantity: '0.31', price: '4458', fee: '1.38', executedAt: '2026-09-24T18:22:41.000Z', mode: 'PAPER' },
+    ],
   },
   rewards: {
     available: 382.41, pending: 124.82, totalEarned: 2864.2, totalWithdrawn: 2356.97, nextSettlement: '04D 12H',

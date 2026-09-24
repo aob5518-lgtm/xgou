@@ -139,48 +139,144 @@ enum TreasuryAccountKind {
   PLATFORM_OPERATING
 }
 
+enum StrategyType {
+  SPOT_SWING
+}
+
+enum StrategyStatus {
+  DRAFT
+  PAPER
+  PAUSED
+  RISK_OFF
+  DISABLED
+}
+
+enum StrategyAccountStatus {
+  ACTIVE
+  PAUSED
+  RISK_OFF
+}
+
+enum SignalType {
+  BUY
+  REDUCE
+  EXIT
+  HOLD
+}
+
+enum ProposalSide {
+  BUY
+  REDUCE
+  EXIT
+}
+
+enum ProposalStatus {
+  CREATED
+  RISK_APPROVED
+  RISK_REDUCED
+  RISK_REJECTED
+  EXECUTED
+  CANCELLED
+}
+
+enum RiskDecisionType {
+  APPROVED
+  REDUCED
+  REJECTED
+}
+
+enum PaperOrderStatus {
+  CREATED
+  RISK_APPROVED
+  SUBMITTED
+  FILLED
+  PARTIALLY_FILLED
+  CANCELLED
+  REJECTED
+}
+
+enum PaperOrderType {
+  MARKET
+  LIMIT
+}
+
+enum PaperSide {
+  BUY
+  SELL
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CircuitBreakerStatus {
+  RUNNING
+  REDUCED_RISK
+  PAUSED
+  RISK_OFF
+}
+
+enum StrategyCycleStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum StrategyActivityType {
+  RESEARCH
+  SIGNAL
+  PROPOSAL
+  RISK
+  EXECUTION
+  SYSTEM
+}
+
 model User {
-  id                  String               @id @default(uuid()) @db.Uuid
-  walletAddress       String               @unique @db.VarChar(42)
-  role                UserRole             @default(USER)
-  deviceFingerprint   String?              @db.VarChar(128)
-  registrationIpHash  String?              @db.VarChar(64)
-  riskScore           Decimal              @default(0) @db.Decimal(8, 4)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  sessions             RefreshSession[]
-  inviterEdge          ReferralEdge?        @relation("ReferralDescendant")
-  directReferrals      ReferralEdge[]        @relation("ReferralAncestor")
-  referralAncestors    ReferralClosure[]     @relation("ClosureDescendant")
-  referralDescendants  ReferralClosure[]     @relation("ClosureAncestor")
-  participations       Participation[]
-  principalXpEntries   PrincipalXpEntry[]
-  xpSnapshots          XpSnapshot[]
-  riskFlags            RiskFlag[]
-  deposits             Deposit[]
-  ledgerAccounts       LedgerAccount[]
-  chainAccounts        ChainAccount[]
+  id                  String             @id @default(uuid()) @db.Uuid
+  walletAddress       String             @unique @db.VarChar(42)
+  role                UserRole           @default(USER)
+  deviceFingerprint   String?            @db.VarChar(128)
+  registrationIpHash  String?            @db.VarChar(64)
+  riskScore           Decimal            @default(0) @db.Decimal(8, 4)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  sessions            RefreshSession[]
+  inviterEdge         ReferralEdge?      @relation("ReferralDescendant")
+  directReferrals     ReferralEdge[]     @relation("ReferralAncestor")
+  referralAncestors   ReferralClosure[]  @relation("ClosureDescendant")
+  referralDescendants ReferralClosure[]  @relation("ClosureAncestor")
+  participations      Participation[]
+  principalXpEntries  PrincipalXpEntry[]
+  xpSnapshots         XpSnapshot[]
+  riskFlags           RiskFlag[]
+  deposits            Deposit[]
+  ledgerAccounts      LedgerAccount[]
+  chainAccounts       ChainAccount[]
 }
 
 model AuthNonce {
-  id            String   @id @default(uuid()) @db.Uuid
-  walletAddress String   @db.VarChar(42)
-  nonceHash     String   @unique @db.VarChar(64)
+  id            String    @id @default(uuid()) @db.Uuid
+  walletAddress String    @db.VarChar(42)
+  nonceHash     String    @unique @db.VarChar(64)
   expiresAt     DateTime
   consumedAt    DateTime?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
+
   @@index([walletAddress, expiresAt])
 }
 
 model RefreshSession {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid
-  tokenHash  String   @unique @db.VarChar(64)
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  rotatedFromId String? @db.Uuid
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  tokenHash     String    @unique @db.VarChar(64)
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  rotatedFromId String?   @db.Uuid
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, expiresAt])
 }
 
@@ -190,6 +286,7 @@ model ReferralEdge {
   createdAt     DateTime @default(now())
   user          User     @relation("ReferralDescendant", fields: [userId], references: [id], onDelete: Restrict)
   inviter       User     @relation("ReferralAncestor", fields: [inviterUserId], references: [id], onDelete: Restrict)
+
   @@index([inviterUserId])
   @@index([createdAt])
 }
@@ -201,6 +298,7 @@ model ReferralClosure {
   createdAt    DateTime @default(now())
   ancestor     User     @relation("ClosureAncestor", fields: [ancestorId], references: [id], onDelete: Restrict)
   descendant   User     @relation("ClosureDescendant", fields: [descendantId], references: [id], onDelete: Restrict)
+
   @@id([ancestorId, descendantId])
   @@index([ancestorId, depth])
   @@index([descendantId, depth])
@@ -217,17 +315,19 @@ model Participation {
   createdAt   DateTime            @default(now())
   user        User                @relation(fields: [userId], references: [id], onDelete: Restrict)
   principalXp PrincipalXpEntry?
+
   @@index([userId, status])
 }
 
 model PrincipalXpEntry {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @db.Uuid
-  amount          Decimal  @db.Decimal(36, 18)
-  participationId String   @unique @db.Uuid
-  createdAt       DateTime @default(now())
-  user            User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @db.Uuid
+  amount          Decimal       @db.Decimal(36, 18)
+  participationId String        @unique @db.Uuid
+  createdAt       DateTime      @default(now())
+  user            User          @relation(fields: [userId], references: [id], onDelete: Restrict)
   participation   Participation @relation(fields: [participationId], references: [id], onDelete: Restrict)
+
   @@index([userId, createdAt])
 }
 
@@ -241,48 +341,51 @@ model RewardEpoch {
 }
 
 model XpSnapshot {
-  id                     String      @id @default(uuid()) @db.Uuid
-  userId                 String      @db.Uuid
-  rewardEpochId          String      @db.Uuid
-  principalXp            Decimal     @db.Decimal(36, 18)
-  dynamicXp              Decimal     @db.Decimal(36, 18)
-  totalXp                Decimal     @db.Decimal(36, 18)
-  directReferralCount    Int
-  unlockedDepth          Int
-  networkPrincipalXp     Decimal     @db.Decimal(36, 18)
-  snapshotAt             DateTime    @default(now())
-  user                    User        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  rewardEpoch             RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+  id                  String      @id @default(uuid()) @db.Uuid
+  userId              String      @db.Uuid
+  rewardEpochId       String      @db.Uuid
+  principalXp         Decimal     @db.Decimal(36, 18)
+  dynamicXp           Decimal     @db.Decimal(36, 18)
+  totalXp             Decimal     @db.Decimal(36, 18)
+  directReferralCount Int
+  unlockedDepth       Int
+  networkPrincipalXp  Decimal     @db.Decimal(36, 18)
+  snapshotAt          DateTime    @default(now())
+  user                User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  rewardEpoch         RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+
   @@unique([userId, rewardEpochId])
   @@index([rewardEpochId])
 }
 
 model SystemConfigVersion {
-  id           String   @id @default(uuid()) @db.Uuid
-  version      Int      @unique
-  values       Json
-  effectiveAt  DateTime
-  createdBy    String   @db.VarChar(128)
-  createdAt    DateTime @default(now())
+  id              String           @id @default(uuid()) @db.Uuid
+  version         Int              @unique
+  values          Json
+  effectiveAt     DateTime
+  createdBy       String           @db.VarChar(128)
+  createdAt       DateTime         @default(now())
   fundAllocations FundAllocation[]
   deposits        Deposit[]
+
   @@index([effectiveAt])
 }
 
 model LedgerAccount {
-  id            String            @id @default(uuid()) @db.Uuid
-  code          String            @unique @db.VarChar(128)
-  type          LedgerAccountType
-  fundDomain    FundDomain?
-  ownerUserId   String?           @db.Uuid
-  asset         String            @db.VarChar(12)
-  status        AccountStatus     @default(ACTIVE)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  ownerUser     User?             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
-  entries       LedgerEntry[]
-  vault         Vault?
-  treasury      TreasuryAccount?
+  id          String            @id @default(uuid()) @db.Uuid
+  code        String            @unique @db.VarChar(128)
+  type        LedgerAccountType
+  fundDomain  FundDomain?
+  ownerUserId String?           @db.Uuid
+  asset       String            @db.VarChar(12)
+  status      AccountStatus     @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  ownerUser   User?             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  entries     LedgerEntry[]
+  vault       Vault?
+  treasury    TreasuryAccount?
+
   @@index([type, asset])
   @@index([fundDomain, status])
   @@index([ownerUserId, type])
@@ -297,7 +400,8 @@ model LedgerTransaction {
   description    String                @db.VarChar(512)
   effectiveAt    DateTime
   createdAt      DateTime              @default(now())
-  entries         LedgerEntry[]
+  entries        LedgerEntry[]
+
   @@index([referenceType, referenceId])
   @@index([effectiveAt])
 }
@@ -314,30 +418,32 @@ model LedgerEntry {
   createdAt     DateTime          @default(now())
   transaction   LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   account       LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
   @@index([accountId, createdAt])
   @@index([transactionId])
   @@index([fundDomain, asset])
 }
 
 model Deposit {
-  id             String        @id @default(uuid()) @db.Uuid
-  userId         String        @db.Uuid
-  asset          String        @db.VarChar(12)
-  amount         Decimal       @db.Decimal(36, 18)
-  chainId        String        @db.VarChar(64)
+  id             String                 @id @default(uuid()) @db.Uuid
+  userId         String                 @db.Uuid
+  asset          String                 @db.VarChar(12)
+  amount         Decimal                @db.Decimal(36, 18)
+  chainId        String                 @db.VarChar(64)
   tokenDecimals  Int
   configVersion  Int?
-  externalRef    String        @unique @db.VarChar(160)
-  idempotencyKey String        @unique @db.VarChar(128)
-  status         DepositStatus @default(CREATED)
+  externalRef    String                 @unique @db.VarChar(160)
+  idempotencyKey String                 @unique @db.VarChar(128)
+  status         DepositStatus          @default(CREATED)
   confirmedAt    DateTime?
   allocatedAt    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  user           User          @relation(fields: [userId], references: [id], onDelete: Restrict)
-  config         SystemConfigVersion? @relation(fields: [configVersion], references: [version], onDelete: Restrict)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  config         SystemConfigVersion?   @relation(fields: [configVersion], references: [version], onDelete: Restrict)
   allocations    FundAllocation[]
   chainReference DepositChainReference?
+
   @@index([userId, status])
   @@index([status, createdAt])
   @@index([configVersion])
@@ -351,6 +457,7 @@ model ChainAccount {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   user          User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
   @@unique([chainId, walletAddress])
   @@unique([userId, chainId])
   @@index([userId])
@@ -367,6 +474,7 @@ model TokenRegistry {
   enabled        Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
   @@unique([chainId, address])
   @@index([chainId, symbol])
 }
@@ -382,6 +490,7 @@ model ContractDeployment {
   verificationStatus ContractVerificationStatus @default(NOT_VERIFIED)
   deployedAt         DateTime
   createdAt          DateTime                   @default(now())
+
   @@unique([chainId, address])
   @@unique([chainId, contractName, version])
 }
@@ -394,6 +503,7 @@ model ChainCursor {
   lastProcessedBlock BigInt
   lastBlockHash      String?  @db.VarChar(66)
   updatedAt          DateTime @updatedAt
+
   @@unique([chainId, contractAddress, eventName])
 }
 
@@ -412,6 +522,7 @@ model OnchainEvent {
   status          OnchainEventStatus @default(FINALIZED)
   error           String?            @db.VarChar(512)
   createdAt       DateTime           @default(now())
+
   @@unique([chainId, txHash, logIndex])
   @@index([chainId, contractAddress, blockNumber])
   @@index([status, createdAt])
@@ -432,6 +543,7 @@ model DepositChainReference {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   deposit         Deposit  @relation(fields: [depositId], references: [id], onDelete: Restrict)
+
   @@unique([chainId, walletAddress, clientReference])
   @@unique([chainId, txHash])
   @@index([clientReference])
@@ -450,43 +562,46 @@ model ReconciliationDifference {
   runId           String?                @db.Uuid
   resolvedAt      DateTime?
   run             ReconciliationRun?     @relation(fields: [runId], references: [id], onDelete: Restrict)
+
   @@index([chainId, fundDomain, status])
   @@index([severity, detectedAt])
   @@index([runId])
 }
 
 model ReconciliationRun {
-  id              String                  @id @default(uuid()) @db.Uuid
-  startedAt       DateTime                @default(now())
+  id              String                     @id @default(uuid()) @db.Uuid
+  startedAt       DateTime                   @default(now())
   finishedAt      DateTime?
-  status          ReconciliationRunStatus @default(RUNNING)
-  chainId         String                  @db.VarChar(64)
-  bullInternal    Decimal?                @db.Decimal(36, 18)
-  bullExternal    Decimal?                @db.Decimal(36, 18)
-  spotInternal    Decimal?                @db.Decimal(36, 18)
-  spotExternal    Decimal?                @db.Decimal(36, 18)
-  futuresInternal Decimal?                @db.Decimal(36, 18)
-  futuresExternal Decimal?                @db.Decimal(36, 18)
-  criticalCount   Int                     @default(0)
-  error           String?                 @db.VarChar(1024)
+  status          ReconciliationRunStatus    @default(RUNNING)
+  chainId         String                     @db.VarChar(64)
+  bullInternal    Decimal?                   @db.Decimal(36, 18)
+  bullExternal    Decimal?                   @db.Decimal(36, 18)
+  spotInternal    Decimal?                   @db.Decimal(36, 18)
+  spotExternal    Decimal?                   @db.Decimal(36, 18)
+  futuresInternal Decimal?                   @db.Decimal(36, 18)
+  futuresExternal Decimal?                   @db.Decimal(36, 18)
+  criticalCount   Int                        @default(0)
+  error           String?                    @db.VarChar(1024)
   differences     ReconciliationDifference[]
+
   @@index([chainId, startedAt])
   @@index([status, startedAt])
 }
 
 model FundAllocation {
-  id             String               @id @default(uuid()) @db.Uuid
-  depositId      String               @db.Uuid
-  fundDomain     FundDomain
-  amount         Decimal              @db.Decimal(36, 18)
-  ratio          Decimal              @db.Decimal(36, 18)
-  configVersion  Int
-  status         FundAllocationStatus @default(PENDING)
-  ledgerReference String              @db.VarChar(128)
-  createdAt      DateTime             @default(now())
-  postedAt       DateTime?
-  deposit        Deposit              @relation(fields: [depositId], references: [id], onDelete: Restrict)
-  config         SystemConfigVersion  @relation(fields: [configVersion], references: [version], onDelete: Restrict)
+  id              String               @id @default(uuid()) @db.Uuid
+  depositId       String               @db.Uuid
+  fundDomain      FundDomain
+  amount          Decimal              @db.Decimal(36, 18)
+  ratio           Decimal              @db.Decimal(36, 18)
+  configVersion   Int
+  status          FundAllocationStatus @default(PENDING)
+  ledgerReference String               @db.VarChar(128)
+  createdAt       DateTime             @default(now())
+  postedAt        DateTime?
+  deposit         Deposit              @relation(fields: [depositId], references: [id], onDelete: Restrict)
+  config          SystemConfigVersion  @relation(fields: [configVersion], references: [version], onDelete: Restrict)
+
   @@unique([depositId, fundDomain])
   @@index([fundDomain, status])
   @@index([configVersion])
@@ -503,6 +618,7 @@ model Vault {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   ledgerAccount   LedgerAccount @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+
   @@index([fundDomain, status])
 }
 
@@ -517,6 +633,7 @@ model TreasuryAccount {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   ledgerAccount   LedgerAccount       @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+
   @@index([fundDomain, status])
 }
 
@@ -530,6 +647,7 @@ model RiskFlag {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+
   @@index([userId, status])
 }
 
@@ -543,6 +661,310 @@ model AuditLog {
   ipHash    String?  @db.VarChar(64)
   requestId String   @db.VarChar(64)
   createdAt DateTime @default(now())
+
   @@index([actorId, createdAt])
   @@index([requestId])
+}
+
+model Strategy {
+  id             String               @id @default(uuid()) @db.Uuid
+  code           String               @unique @db.VarChar(64)
+  name           String               @db.VarChar(128)
+  type           StrategyType
+  fundDomain     FundDomain           @default(SPOT)
+  status         StrategyStatus       @default(DRAFT)
+  currentVersion Int                  @default(1)
+  riskProfile    Json
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  versions       StrategyVersion[]
+  account        StrategyAccount?
+  signals        TradeSignal[]
+  proposals      TradeProposal[]
+  cycles         StrategyCycle[]
+  circuitBreaker CircuitBreakerState?
+  activities     StrategyActivity[]
+}
+
+model StrategyVersion {
+  id         String   @id @default(uuid()) @db.Uuid
+  strategyId String   @db.Uuid
+  version    Int
+  parameters Json
+  active     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+
+  @@unique([strategyId, version])
+}
+
+model StrategyAccount {
+  id               String                @id @default(uuid()) @db.Uuid
+  strategyId       String                @unique @db.Uuid
+  status           StrategyAccountStatus @default(ACTIVE)
+  asset            String                @default("USDC") @db.VarChar(12)
+  allocatedCapital Decimal               @default(0) @db.Decimal(36, 18)
+  activeCapital    Decimal               @default(0) @db.Decimal(36, 18)
+  cashBalance      Decimal               @default(0) @db.Decimal(36, 18)
+  reserveBalance   Decimal               @default(0) @db.Decimal(36, 18)
+  nav              Decimal               @default(0) @db.Decimal(36, 18)
+  highWaterMark    Decimal               @default(0) @db.Decimal(36, 18)
+  realizedPnl      Decimal               @default(0) @db.Decimal(36, 18)
+  unrealizedPnl    Decimal               @default(0) @db.Decimal(36, 18)
+  dailyPnl         Decimal               @default(0) @db.Decimal(36, 18)
+  drawdown         Decimal               @default(0) @db.Decimal(36, 18)
+  updatedAt        DateTime              @updatedAt
+  strategy         Strategy              @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+  allocations      StrategyAllocation[]
+  positions        Position[]
+  pnl              StrategyPnL[]
+  navSnapshots     NavSnapshot[]
+}
+
+model StrategyAllocation {
+  id                String          @id @default(uuid()) @db.Uuid
+  strategyAccountId String          @db.Uuid
+  symbol            String          @db.VarChar(16)
+  targetWeight      Decimal         @db.Decimal(18, 8)
+  maxWeight         Decimal         @db.Decimal(18, 8)
+  enabled           Boolean         @default(true)
+  account           StrategyAccount @relation(fields: [strategyAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([strategyAccountId, symbol])
+}
+
+model StrategyCycle {
+  id         String              @id @default(uuid()) @db.Uuid
+  strategyId String              @db.Uuid
+  cycleId    String              @db.VarChar(128)
+  status     StrategyCycleStatus @default(RUNNING)
+  startedAt  DateTime            @default(now())
+  finishedAt DateTime?
+  error      String?             @db.VarChar(1024)
+  strategy   Strategy            @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+
+  @@unique([strategyId, cycleId])
+  @@index([status, startedAt])
+}
+
+model TradeSignal {
+  id         String         @id @default(uuid()) @db.Uuid
+  strategyId String         @db.Uuid
+  cycleId    String         @db.VarChar(128)
+  symbol     String         @db.VarChar(16)
+  type       SignalType
+  strength   Decimal        @db.Decimal(18, 8)
+  price      Decimal        @db.Decimal(36, 18)
+  indicators Json
+  rationale  Json
+  createdAt  DateTime       @default(now())
+  strategy   Strategy       @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+  proposal   TradeProposal?
+
+  @@unique([strategyId, cycleId, symbol])
+}
+
+model TradeProposal {
+  id                String         @id @default(uuid()) @db.Uuid
+  strategyId        String         @db.Uuid
+  signalId          String         @unique @db.Uuid
+  cycleId           String         @db.VarChar(128)
+  symbol            String         @db.VarChar(16)
+  side              ProposalSide
+  requestedNotional Decimal        @db.Decimal(36, 18)
+  approvedNotional  Decimal?       @db.Decimal(36, 18)
+  referencePrice    Decimal        @db.Decimal(36, 18)
+  status            ProposalStatus @default(CREATED)
+  createdAt         DateTime       @default(now())
+  strategy          Strategy       @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+  signal            TradeSignal    @relation(fields: [signalId], references: [id], onDelete: Restrict)
+  riskDecision      RiskDecision?
+  paperOrder        PaperOrder?
+
+  @@index([strategyId, createdAt])
+}
+
+model RiskDecision {
+  id                String           @id @default(uuid()) @db.Uuid
+  proposalId        String           @unique @db.Uuid
+  decision          RiskDecisionType
+  requestedNotional Decimal          @db.Decimal(36, 18)
+  approvedNotional  Decimal          @db.Decimal(36, 18)
+  reasonCodes       Json
+  metrics           Json
+  createdAt         DateTime         @default(now())
+  proposal          TradeProposal    @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  paperOrder        PaperOrder?
+}
+
+model PaperOrder {
+  id             String           @id @default(uuid()) @db.Uuid
+  proposalId     String           @unique @db.Uuid
+  riskDecisionId String           @unique @db.Uuid
+  cycleId        String           @db.VarChar(128)
+  symbol         String           @db.VarChar(16)
+  side           PaperSide
+  type           PaperOrderType   @default(MARKET)
+  status         PaperOrderStatus @default(CREATED)
+  quantity       Decimal          @db.Decimal(36, 18)
+  notional       Decimal          @db.Decimal(36, 18)
+  referencePrice Decimal          @db.Decimal(36, 18)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  proposal       TradeProposal    @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  riskDecision   RiskDecision     @relation(fields: [riskDecisionId], references: [id], onDelete: Restrict)
+  executions     PaperExecution[]
+
+  @@index([status, createdAt])
+}
+
+model PaperExecution {
+  id            String     @id @default(uuid()) @db.Uuid
+  orderId       String     @db.Uuid
+  fillPrice     Decimal    @db.Decimal(36, 18)
+  quantity      Decimal    @db.Decimal(36, 18)
+  grossNotional Decimal    @db.Decimal(36, 18)
+  fee           Decimal    @db.Decimal(36, 18)
+  slippageBps   Decimal    @db.Decimal(18, 8)
+  executedAt    DateTime   @default(now())
+  order         PaperOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, executedAt])
+}
+
+model Position {
+  id                String          @id @default(uuid()) @db.Uuid
+  strategyAccountId String          @db.Uuid
+  symbol            String          @db.VarChar(16)
+  status            PositionStatus  @default(OPEN)
+  quantity          Decimal         @default(0) @db.Decimal(36, 18)
+  averageEntry      Decimal         @default(0) @db.Decimal(36, 18)
+  markPrice         Decimal         @default(0) @db.Decimal(36, 18)
+  marketValue       Decimal         @default(0) @db.Decimal(36, 18)
+  realizedPnl       Decimal         @default(0) @db.Decimal(36, 18)
+  unrealizedPnl     Decimal         @default(0) @db.Decimal(36, 18)
+  openedAt          DateTime        @default(now())
+  closedAt          DateTime?
+  updatedAt         DateTime        @updatedAt
+  account           StrategyAccount @relation(fields: [strategyAccountId], references: [id], onDelete: Restrict)
+  lots              PositionLot[]
+
+  @@unique([strategyAccountId, symbol])
+}
+
+model PositionLot {
+  id         String    @id @default(uuid()) @db.Uuid
+  positionId String    @db.Uuid
+  quantity   Decimal   @db.Decimal(36, 18)
+  entryPrice Decimal   @db.Decimal(36, 18)
+  fee        Decimal   @default(0) @db.Decimal(36, 18)
+  openedAt   DateTime  @default(now())
+  closedAt   DateTime?
+  position   Position  @relation(fields: [positionId], references: [id], onDelete: Restrict)
+
+  @@index([positionId, openedAt])
+}
+
+model StrategyPnL {
+  id                String          @id @default(uuid()) @db.Uuid
+  strategyAccountId String          @db.Uuid
+  periodStart       DateTime
+  periodEnd         DateTime
+  realizedPnl       Decimal         @db.Decimal(36, 18)
+  unrealizedPnl     Decimal         @db.Decimal(36, 18)
+  fees              Decimal         @db.Decimal(36, 18)
+  nav               Decimal         @db.Decimal(36, 18)
+  account           StrategyAccount @relation(fields: [strategyAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([strategyAccountId, periodStart, periodEnd])
+}
+
+model NavSnapshot {
+  id                String          @id @default(uuid()) @db.Uuid
+  strategyAccountId String          @db.Uuid
+  nav               Decimal         @db.Decimal(36, 18)
+  cash              Decimal         @db.Decimal(36, 18)
+  reserve           Decimal         @db.Decimal(36, 18)
+  exposure          Decimal         @db.Decimal(36, 18)
+  realizedPnl       Decimal         @db.Decimal(36, 18)
+  unrealizedPnl     Decimal         @db.Decimal(36, 18)
+  drawdown          Decimal         @db.Decimal(18, 8)
+  capturedAt        DateTime        @default(now())
+  account           StrategyAccount @relation(fields: [strategyAccountId], references: [id], onDelete: Restrict)
+
+  @@index([strategyAccountId, capturedAt])
+}
+
+model MarketDataSnapshot {
+  id         String   @id @default(uuid()) @db.Uuid
+  source     String   @db.VarChar(32)
+  symbol     String   @db.VarChar(16)
+  timeframe  String   @db.VarChar(16)
+  price      Decimal  @db.Decimal(36, 18)
+  payload    Json
+  observedAt DateTime
+  staleAfter DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([symbol, observedAt])
+}
+
+model RiskEvent {
+  id         String                 @id @default(uuid()) @db.Uuid
+  strategyId String?                @db.Uuid
+  severity   ReconciliationSeverity
+  code       String                 @db.VarChar(128)
+  message    String                 @db.VarChar(512)
+  details    Json
+  resolvedAt DateTime?
+  createdAt  DateTime               @default(now())
+
+  @@index([severity, createdAt])
+}
+
+model CircuitBreakerState {
+  id          String               @id @default(uuid()) @db.Uuid
+  strategyId  String               @unique @db.Uuid
+  status      CircuitBreakerStatus @default(RUNNING)
+  reason      String?              @db.VarChar(512)
+  triggeredAt DateTime?
+  updatedAt   DateTime             @updatedAt
+  strategy    Strategy             @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+}
+
+model AssetConfig {
+  id               String   @id @default(uuid()) @db.Uuid
+  symbol           String   @unique @db.VarChar(16)
+  enabled          Boolean  @default(true)
+  quoteAsset       String   @default("USDC") @db.VarChar(12)
+  maxWeight        Decimal  @db.Decimal(18, 8)
+  minOrderNotional Decimal  @db.Decimal(36, 18)
+  priceDecimals    Int
+  quantityDecimals Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model StrategyActivity {
+  id         String               @id @default(uuid()) @db.Uuid
+  strategyId String?              @db.Uuid
+  type       StrategyActivityType
+  agentName  String               @db.VarChar(64)
+  message    String               @db.VarChar(512)
+  status     String               @db.VarChar(64)
+  metadata   Json
+  createdAt  DateTime             @default(now())
+  strategy   Strategy?            @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+}
+
+model StrategyShare {
+  id          String   @id @default(uuid()) @db.Uuid
+  strategyId  String   @db.Uuid
+  enabled     Boolean  @default(false)
+  totalShares Decimal  @default(0) @db.Decimal(36, 18)
+  createdAt   DateTime @default(now())
+
+  @@index([strategyId])
 }

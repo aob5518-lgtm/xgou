@@ -11,6 +11,7 @@ import { SystemConfigModule } from './config/system-config.module.js';
 import { FundsModule } from './funds/funds.module.js';
 import { ChainModule } from './chain/chain.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
+import { SpotAgentModule } from './spot-agent/spot-agent.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     XpModule,
     FundsModule,
     DashboardModule,
+    SpotAgentModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

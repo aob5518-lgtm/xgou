@@ -37,7 +37,25 @@ export class ApiXgouDataProvider implements XgouDataProvider {
 
   getDashboard() { return this.get<DemoData['dashboard']>('/dashboard'); }
   getBullFund() { return this.get<DemoData['bull']>('/funds/bull'); }
-  getAgentFund() { return this.get<DemoData['agent']>('/funds/agent'); }
+  async getAgentFund() {
+    const data = await this.get<Record<string, unknown>>('/agent/spot');
+    const numeric = (key: string): number => Number(data[key] ?? 0);
+    const text = (value: unknown, fallback: string): string => typeof value === 'string' ? value : fallback;
+    const positions = Array.isArray(data.positions) ? data.positions as Array<Record<string, unknown>> : [];
+    const recentTrades = Array.isArray(data.recentTrades) ? data.recentTrades as unknown as DemoData['agent']['recentTrades'] : demoData.agent.recentTrades;
+    return {
+      ...demoData.agent,
+      mode: 'PAPER' as const,
+      status: text(data.status, 'DRAFT'),
+      circuitState: text(data.circuitState, 'RUNNING'),
+      allocatedCapital: numeric('allocatedCapital'), activeCapital: numeric('activeCapital'),
+      cashBalance: numeric('cashBalance'), reserveBalance: numeric('reserveBalance'),
+      realizedPnl: numeric('realizedPnl'), unrealizedPnl: numeric('unrealizedPnl'), dailyPnl: numeric('dailyPnl'), drawdown: numeric('drawdown'),
+      spot: { ...demoData.agent.spot, nav: numeric('nav'), exposure: numeric('nav') === 0 ? 0 : numeric('exposure') / numeric('nav') * 100, risk: text(data.circuitState, 'RUNNING') },
+      positions: positions.map((position) => ({ symbol: text(position.symbol, ''), entry: Number(position.averageEntry ?? 0), current: Number(position.markPrice ?? 0), pnlPercent: Number(position.averageEntry ?? 0) === 0 ? 0 : (Number(position.markPrice ?? 0) / Number(position.averageEntry ?? 1) - 1) * 100, allocation: numeric('nav') === 0 ? 0 : Number(position.marketValue ?? 0) / numeric('nav') * 100 })),
+      recentTrades,
+    } as DemoData['agent'];
+  }
   getRewards() { return this.get<DemoData['rewards']>('/rewards'); }
   getXp() { return this.get<DemoData['xp']>('/xp/me'); }
   getActivities() { return this.get<DemoData['activities']>('/activities'); }

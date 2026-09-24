@@ -25,6 +25,39 @@ const seed = async (): Promise<void> => {
     update: {},
   });
   await db.systemConfigVersion.upsert({
+    where: { version: 3 },
+    create: {
+      version: 3,
+      values: SYSTEM_CONFIG_DEFAULTS,
+      effectiveAt: new Date('2026-09-25T00:00:00.000Z'),
+      createdBy: 'system-seed-phase3a',
+    },
+    update: {},
+  });
+
+  const strategy = await db.strategy.upsert({
+    where: { code: 'SPOT_SWING_V1' },
+    create: {
+      code: 'SPOT_SWING_V1', name: 'Spot Swing V1', type: 'SPOT_SWING', status: 'DRAFT',
+      riskProfile: { longOnly: true, paperOnly: true, allowedAssets: ['BTC/USDC', 'ETH/USDC', 'SOL/USDC'] },
+    },
+    update: {},
+  });
+  await db.strategyVersion.upsert({
+    where: { strategyId_version: { strategyId: strategy.id, version: 1 } },
+    create: { strategyId: strategy.id, version: 1, active: true, parameters: { emaFast: 20, emaSlow: 50, rsi: 14, timeframe: '1h' } },
+    update: {},
+  });
+  await db.strategyAccount.upsert({ where: { strategyId: strategy.id }, create: { strategyId: strategy.id }, update: {} });
+  await db.circuitBreakerState.upsert({ where: { strategyId: strategy.id }, create: { strategyId: strategy.id }, update: {} });
+  for (const asset of [
+    { symbol: 'BTC/USDC', priceDecimals: 2, quantityDecimals: 8 },
+    { symbol: 'ETH/USDC', priceDecimals: 2, quantityDecimals: 8 },
+    { symbol: 'SOL/USDC', priceDecimals: 4, quantityDecimals: 8 },
+  ]) {
+    await db.assetConfig.upsert({ where: { symbol: asset.symbol }, create: { ...asset, maxWeight: '0.20', minOrderNotional: '10' }, update: {} });
+  }
+  await db.systemConfigVersion.upsert({
     where: { version: 2 },
     create: {
       version: 2,

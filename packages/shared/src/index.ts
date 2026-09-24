@@ -46,6 +46,18 @@ export const SYSTEM_CONFIG_DEFAULTS = {
   maxDrawdown: '0.15',
   minLiquidationDistance: '0.20',
   arcGasReserve: '100',
+  spotPaperTradingEnabled: false,
+  spotStrategyCycleSeconds: 60,
+  spotMaxTotalExposure: '0.80',
+  spotMaxOrderNotional: '25000',
+  spotTradingFeeBps: '10',
+  spotBaseSlippageBps: '5',
+  spotMaxSlippageBps: '50',
+  spotDataStaleSeconds: 120,
+  spotRiskReducedDailyLoss: '0.01',
+  spotPauseDailyLoss: '0.02',
+  spotMaxVolatility: '0.12',
+  spotMinLiquidityUsd: '1000000',
 } as const;
 
 const nonNegativeDecimalString = z.string().regex(/^\d+(?:\.\d+)?$/);
@@ -76,6 +88,18 @@ export const systemConfigSchema = z
     maxDrawdown: ratioString,
     minLiquidationDistance: ratioString,
     arcGasReserve: nonNegativeDecimalString,
+    spotPaperTradingEnabled: z.boolean(),
+    spotStrategyCycleSeconds: z.number().int().min(30).max(3600),
+    spotMaxTotalExposure: ratioString,
+    spotMaxOrderNotional: nonNegativeDecimalString,
+    spotTradingFeeBps: nonNegativeDecimalString,
+    spotBaseSlippageBps: nonNegativeDecimalString,
+    spotMaxSlippageBps: nonNegativeDecimalString,
+    spotDataStaleSeconds: z.number().int().min(1).max(3600),
+    spotRiskReducedDailyLoss: ratioString,
+    spotPauseDailyLoss: ratioString,
+    spotMaxVolatility: ratioString,
+    spotMinLiquidityUsd: nonNegativeDecimalString,
   })
   .superRefine((config, context) => {
     const total = new Decimal(config.bullAllocation)
