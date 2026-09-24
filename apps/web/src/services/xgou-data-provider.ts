@@ -1,4 +1,6 @@
 import { demoData, type DemoData } from '@/lib/demo-data';
+import { getAccessToken } from '@/services/auth-session';
+import { getAppMode } from '@/lib/app-mode';
 
 export interface XgouDataProvider {
   getDashboard(): Promise<DemoData['dashboard']>;
@@ -24,7 +26,11 @@ export class ApiXgouDataProvider implements XgouDataProvider {
   constructor(private readonly baseUrl: string) {}
 
   private async get<T>(path: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, { credentials: 'include' });
+    const accessToken = getAccessToken();
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      credentials: 'include',
+      headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {},
+    });
     if (!response.ok) throw new Error(`XGOU API request failed: ${String(response.status)}`);
     return response.json() as Promise<T>;
   }
@@ -39,8 +45,7 @@ export class ApiXgouDataProvider implements XgouDataProvider {
 }
 
 export const getXgouDataProvider = (): XgouDataProvider => {
-  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
-  return demoMode
+  return getAppMode() === 'demo'
     ? new DemoXgouDataProvider()
     : new ApiXgouDataProvider(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/v1');
 };

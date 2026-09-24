@@ -1,5 +1,7 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
+import { getChainConfig } from '@xgou/chains';
+import { getAddress } from 'viem';
 import {
   allocateDeposit,
   buildDepositJournals,
@@ -12,13 +14,15 @@ import type { Prisma } from '@xgou/database';
 import type { AuditContext } from '../common/audit-context.js';
 import { SystemConfigService } from '../config/system-config.service.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { DeploymentRegistryService } from '../chain/deployment-registry.service.js';
+import { DepositSafetyService } from './deposit-safety.service.js';
 
 export interface CreateDepositInput {
   readonly amount: string;
   readonly asset: 'USDC' | 'USDT';
   readonly chainId: string;
   readonly tokenDecimals: number;
-  readonly externalRef: string;
+  readonly clientReference: string;
   readonly idempotencyKey: string;
 }
 
@@ -29,6 +33,10 @@ export interface DepositView {
   readonly chainId: string;
   readonly tokenDecimals: number;
   readonly status: string;
+  readonly clientReference: string;
+  readonly txHash: string | null;
+  readonly routerAddress: string;
+  readonly assetAddress: string;
   readonly createdAt: string;
 }
 
@@ -37,9 +45,18 @@ export class DepositService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configs: SystemConfigService,
+    private readonly deployments: DeploymentRegistryService,
+    private readonly safety: DepositSafetyService,
   ) {}
 
   async create(userId: string, input: CreateDepositInput, audit: AuditContext): Promise<DepositView> {
+    await this.safety.assertDepositsEnabled();
+    const chain = getChainConfig(process.env.CHAIN_ENV);
+    if (input.chainId !== String(chain.id)) throw new ConflictException('deposit chain does not match CHAIN_ENV');
+    if (input.asset !== chain.usdc.symbol || input.tokenDecimals !== chain.usdc.decimals) {
+      throw new ConflictException('deposit token metadata does not match chain registry');
+    }
+    const deployment = this.deployments.get();
     const existing = await this.prisma.db.deposit.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) {
       if (existing.userId !== userId) throw new ConflictException('idempotency key belongs to another user');
@@ -48,14 +65,43 @@ export class DepositService {
         existing.asset !== input.asset ||
         existing.chainId !== input.chainId ||
         existing.tokenDecimals !== input.tokenDecimals ||
-        existing.externalRef !== input.externalRef
+        existing.externalRef !== input.clientReference
       ) {
         throw new ConflictException('idempotency key was already used with a different deposit payload');
       }
-      return this.view(existing);
+      return this.view(existing, await this.prisma.db.depositChainReference.findUniqueOrThrow({ where: { depositId: existing.id } }));
     }
     const deposit = await this.prisma.db.$transaction(async (tx) => {
-      const created = await tx.deposit.create({ data: { userId, ...input } });
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) throw new NotFoundException('user not found');
+      const walletAddress = getAddress(user.walletAddress).toLowerCase();
+      await tx.chainAccount.upsert({
+        where: { userId_chainId: { userId, chainId: input.chainId } },
+        create: { userId, chainId: input.chainId, walletAddress },
+        update: { walletAddress },
+      });
+      const created = await tx.deposit.create({
+        data: {
+          userId,
+          amount: input.amount,
+          asset: input.asset,
+          chainId: input.chainId,
+          tokenDecimals: input.tokenDecimals,
+          externalRef: input.clientReference,
+          idempotencyKey: input.idempotencyKey,
+          status: 'AWAITING_APPROVAL',
+          chainReference: {
+            create: {
+              chainId: input.chainId,
+              clientReference: input.clientReference,
+              walletAddress,
+              routerAddress: deployment.depositRouter.toLowerCase(),
+              assetAddress: deployment.usdc.toLowerCase(),
+            },
+          },
+        },
+        include: { chainReference: true },
+      });
       await tx.auditLog.create({
         data: {
           actorId: userId,
@@ -68,12 +114,52 @@ export class DepositService {
       });
       return created;
     });
-    return this.view(deposit);
+    if (!deposit.chainReference) throw new Error('deposit chain reference was not created');
+    return this.view(deposit, deposit.chainReference);
   }
 
   async list(userId: string): Promise<readonly DepositView[]> {
-    const deposits = await this.prisma.db.deposit.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });
-    return deposits.map((deposit) => this.view(deposit));
+    const deposits = await this.prisma.db.deposit.findMany({
+      where: { userId },
+      include: { chainReference: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return deposits.flatMap((deposit) => deposit.chainReference ? [this.view(deposit, deposit.chainReference)] : []);
+  }
+
+  async markTransactionSubmitted(userId: string, depositId: string, txHash: string, audit: AuditContext): Promise<DepositView> {
+    const deposit = await this.prisma.db.deposit.findUnique({
+      where: { id: depositId },
+      include: { chainReference: true },
+    });
+    if (!deposit || !deposit.chainReference) throw new NotFoundException('deposit not found');
+    if (deposit.userId !== userId) throw new ForbiddenException('deposit belongs to another user');
+    if (!['AWAITING_APPROVAL', 'AWAITING_TX', 'TX_SUBMITTED'].includes(deposit.status)) {
+      throw new ConflictException('deposit is not awaiting a transaction');
+    }
+    if (deposit.chainReference.txHash && deposit.chainReference.txHash.toLowerCase() !== txHash.toLowerCase()) {
+      throw new ConflictException('deposit already has a different transaction hash');
+    }
+    const updated = await this.prisma.db.$transaction(async (tx) => {
+      const saved = await tx.deposit.update({ where: { id: depositId }, data: { status: 'TX_SUBMITTED' } });
+      const chainReference = await tx.depositChainReference.update({
+        where: { depositId },
+        data: { txHash: txHash.toLowerCase() },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'DEPOSIT.TX_SUBMITTED',
+          target: `deposit:${depositId}`,
+          before: { status: deposit.status },
+          after: { status: 'TX_SUBMITTED', txHash: txHash.toLowerCase() },
+          ipHash: audit.ipHash,
+          requestId: audit.requestId,
+        },
+      });
+      return { saved, chainReference };
+    });
+    return this.view(updated.saved, updated.chainReference);
   }
 
   async allocateConfirmed(depositId: string, allocationRequestId: string, audit: AuditContext): Promise<void> {
@@ -85,7 +171,8 @@ export class DepositService {
       const deposit = await tx.deposit.findUnique({ where: { id: depositId } });
       if (!deposit) throw new NotFoundException('deposit not found');
       if (deposit.status === 'COMPLETED') return;
-      if (deposit.status !== 'CONFIRMED') throw new ConflictException('only confirmed deposits can be allocated');
+      if (deposit.status !== 'CHAIN_CONFIRMED') throw new ConflictException('only chain-confirmed deposits can be allocated');
+      await tx.deposit.update({ where: { id: deposit.id }, data: { status: 'ALLOCATING' } });
 
       const money = new Money({
         amount: deposit.amount.toString(),
@@ -255,6 +342,11 @@ export class DepositService {
     tokenDecimals: number;
     status: string;
     createdAt: Date;
+  }, chainReference: {
+    clientReference: string;
+    txHash: string | null;
+    routerAddress: string;
+    assetAddress: string;
   }): DepositView {
     return {
       id: deposit.id,
@@ -263,6 +355,10 @@ export class DepositService {
       chainId: deposit.chainId,
       tokenDecimals: deposit.tokenDecimals,
       status: deposit.status,
+      clientReference: chainReference.clientReference,
+      txHash: chainReference.txHash,
+      routerAddress: chainReference.routerAddress,
+      assetAddress: chainReference.assetAddress,
       createdAt: deposit.createdAt.toISOString(),
     };
   }

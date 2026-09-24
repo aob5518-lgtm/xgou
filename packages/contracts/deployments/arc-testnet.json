@@ -1,0 +1,21 @@
+{
+  "networkKey": "arc-testnet",
+  "chainId": 5042002,
+  "deployed": false,
+  "deployedAt": null,
+  "deploymentBlock": null,
+  "deployer": null,
+  "depositRouter": null,
+  "bullVault": null,
+  "spotVault": null,
+  "futuresVault": null,
+  "usdc": "0x3600000000000000000000000000000000000000",
+  "txHashes": {},
+  "contractVersions": {
+    "depositRouter": "1.0.0",
+    "bullVault": "1.0.0",
+    "spotVault": "1.0.0",
+    "futuresVault": "1.0.0"
+  },
+  "verified": false
+}

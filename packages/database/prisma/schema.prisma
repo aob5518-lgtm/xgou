@@ -70,10 +70,38 @@ enum LedgerTransactionKind {
 
 enum DepositStatus {
   CREATED
-  PENDING_CHAIN
-  CONFIRMED
+  AWAITING_APPROVAL
+  AWAITING_TX
+  TX_SUBMITTED
+  CHAIN_CONFIRMED
   ALLOCATING
   COMPLETED
+  FAILED
+  REJECTED
+}
+
+enum OnchainEventStatus {
+  FINALIZED
+  PROCESSED
+  FAILED
+  REVIEW
+}
+
+enum ReconciliationStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum ReconciliationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum ContractVerificationStatus {
+  NOT_VERIFIED
+  VERIFIED
   FAILED
 }
 
@@ -125,6 +153,7 @@ model User {
   riskFlags            RiskFlag[]
   deposits             Deposit[]
   ledgerAccounts       LedgerAccount[]
+  chainAccounts        ChainAccount[]
 }
 
 model AuthNonce {
@@ -299,8 +328,118 @@ model Deposit {
   updatedAt      DateTime      @updatedAt
   user           User          @relation(fields: [userId], references: [id], onDelete: Restrict)
   allocations    FundAllocation[]
+  chainReference DepositChainReference?
   @@index([userId, status])
   @@index([status, createdAt])
+}
+
+model ChainAccount {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  chainId       String   @db.VarChar(64)
+  walletAddress String   @db.VarChar(42)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@unique([chainId, walletAddress])
+  @@unique([userId, chainId])
+  @@index([userId])
+}
+
+model TokenRegistry {
+  id             String   @id @default(uuid()) @db.Uuid
+  chainId        String   @db.VarChar(64)
+  symbol         String   @db.VarChar(12)
+  address        String   @db.VarChar(42)
+  decimals       Int
+  isGasToken     Boolean  @default(false)
+  isDepositAsset Boolean  @default(false)
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@unique([chainId, address])
+  @@index([chainId, symbol])
+}
+
+model ContractDeployment {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  chainId            String                     @db.VarChar(64)
+  contractName       String                     @db.VarChar(64)
+  address            String                     @db.VarChar(42)
+  version            String                     @db.VarChar(32)
+  deploymentTxHash   String                     @db.VarChar(66)
+  deploymentBlock    BigInt
+  verificationStatus ContractVerificationStatus @default(NOT_VERIFIED)
+  deployedAt         DateTime
+  createdAt          DateTime                   @default(now())
+  @@unique([chainId, address])
+  @@unique([chainId, contractName, version])
+}
+
+model ChainCursor {
+  id                 String   @id @default(uuid()) @db.Uuid
+  chainId            String   @db.VarChar(64)
+  contractAddress    String   @db.VarChar(42)
+  eventName          String   @db.VarChar(64)
+  lastProcessedBlock BigInt
+  lastBlockHash      String?  @db.VarChar(66)
+  updatedAt          DateTime @updatedAt
+  @@unique([chainId, contractAddress, eventName])
+}
+
+model OnchainEvent {
+  id              String             @id @default(uuid()) @db.Uuid
+  chainId         String             @db.VarChar(64)
+  contractAddress String             @db.VarChar(42)
+  txHash          String             @db.VarChar(66)
+  logIndex        Int
+  blockNumber     BigInt
+  blockHash       String             @db.VarChar(66)
+  eventName       String             @db.VarChar(64)
+  payload         Json
+  finalizedAt     DateTime
+  processedAt     DateTime?
+  status          OnchainEventStatus @default(FINALIZED)
+  error           String?            @db.VarChar(512)
+  createdAt       DateTime           @default(now())
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, contractAddress, blockNumber])
+  @@index([status, createdAt])
+}
+
+model DepositChainReference {
+  id              String   @id @default(uuid()) @db.Uuid
+  depositId       String   @unique @db.Uuid
+  chainId         String   @db.VarChar(64)
+  clientReference String   @db.VarChar(66)
+  walletAddress   String   @db.VarChar(42)
+  routerAddress   String   @db.VarChar(42)
+  assetAddress    String   @db.VarChar(42)
+  txHash          String?  @db.VarChar(66)
+  logIndex        Int?
+  blockNumber     BigInt?
+  blockHash       String?  @db.VarChar(66)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deposit         Deposit  @relation(fields: [depositId], references: [id], onDelete: Restrict)
+  @@unique([chainId, walletAddress, clientReference])
+  @@unique([chainId, txHash])
+  @@index([clientReference])
+}
+
+model ReconciliationDifference {
+  id              String                 @id @default(uuid()) @db.Uuid
+  chainId         String                 @db.VarChar(64)
+  fundDomain      FundDomain
+  internalBalance Decimal                @db.Decimal(36, 18)
+  externalBalance Decimal                @db.Decimal(36, 18)
+  difference      Decimal                @db.Decimal(36, 18)
+  detectedAt      DateTime               @default(now())
+  status          ReconciliationStatus   @default(OPEN)
+  severity        ReconciliationSeverity
+  resolvedAt      DateTime?
+  @@index([chainId, fundDomain, status])
+  @@index([severity, detectedAt])
 }
 
 model FundAllocation {

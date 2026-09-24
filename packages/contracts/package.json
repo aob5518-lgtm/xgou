@@ -1,0 +1,22 @@
+{
+  "name": "@xgou/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./deployments": {
+      "types": "./deployments/registry.d.ts",
+      "default": "./deployments/registry.js"
+    }
+  },
+  "scripts": {
+    "build": "forge build",
+    "lint": "forge fmt --check",
+    "typecheck": "forge build",
+    "test": "forge test",
+    "test:integration": "forge test"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.4.0"
+  }
+}
