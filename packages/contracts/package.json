@@ -1,0 +1,15 @@
+{
+  "name": "@xgou/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "forge build",
+    "lint": "forge fmt --check",
+    "typecheck": "forge build",
+    "test": "forge test",
+    "test:integration": "forge test"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.4.0"
+  }
+}

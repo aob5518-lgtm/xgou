@@ -10,3 +10,6 @@ packages/database/generated
 *.log
 .DS_Store
 .pnpm-store
+packages/contracts/cache
+packages/contracts/out
+packages/contracts/broadcast
