@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
-import { createDepositSchema } from '@xgou/shared';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { createDepositSchema, submitDepositTransactionSchema } from '@xgou/shared';
 import type { Request } from 'express';
 import { AccessTokenGuard } from '../auth/access-token.guard.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
@@ -25,5 +25,21 @@ export class DepositController {
   @Get()
   list(@CurrentUser() user: AuthenticatedUser): Promise<readonly DepositView[]> {
     return this.deposits.list(user.userId);
+  }
+
+  @Post(':id/tx-submitted')
+  transactionSubmitted(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') depositId: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+  ): Promise<DepositView> {
+    const { txHash } = parseBody(submitDepositTransactionSchema, body);
+    return this.deposits.markTransactionSubmitted(
+      user.userId,
+      depositId,
+      txHash,
+      auditContextFromRequest(request),
+    );
   }
 }

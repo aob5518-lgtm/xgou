@@ -1,5 +1,6 @@
 import { demoData, type DemoData } from '@/lib/demo-data';
 import { getAccessToken } from '@/services/auth-session';
+import { getAppMode } from '@/lib/app-mode';
 
 export interface XgouDataProvider {
   getDashboard(): Promise<DemoData['dashboard']>;
@@ -44,8 +45,7 @@ export class ApiXgouDataProvider implements XgouDataProvider {
 }
 
 export const getXgouDataProvider = (): XgouDataProvider => {
-  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
-  return demoMode
+  return getAppMode() === 'demo'
     ? new DemoXgouDataProvider()
     : new ApiXgouDataProvider(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/v1');
 };

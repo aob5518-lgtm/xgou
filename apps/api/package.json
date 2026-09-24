@@ -21,6 +21,7 @@
     "@nestjs/throttler": "latest",
     "@xgou/database": "workspace:*",
     "@xgou/chains": "workspace:*",
+    "@xgou/contracts": "workspace:*",
     "@xgou/ledger": "workspace:*",
     "@xgou/referral-engine": "workspace:*",
     "@xgou/shared": "workspace:*",

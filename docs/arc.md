@@ -26,3 +26,7 @@ Official sources:
 - [Circle faucet](https://faucet.circle.com)
 
 Runtime overrides such as `ARC_TESTNET_RPC_URL` are deployment concerns. Chain identity and token metadata remain centralized in `packages/chains`; overrides must be validated against the selected registry entry.
+
+## XGOU deployment status
+
+`packages/contracts/deployments/arc-testnet.json` is the single deployment registry consumed by the backend and frontend. It currently records the contract version and official USDC address but remains `deployed: false` until an authorized `DEPLOYER_PRIVATE_KEY` is supplied. The application therefore keeps Testnet participation writes disabled rather than guessing or substituting contract addresses.

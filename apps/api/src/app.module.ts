@@ -9,17 +9,21 @@ import { ReferralModule } from './referral/referral.module.js';
 import { XpModule } from './xp/xp.module.js';
 import { SystemConfigModule } from './config/system-config.module.js';
 import { FundsModule } from './funds/funds.module.js';
+import { ChainModule } from './chain/chain.module.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     DatabaseModule,
+    ChainModule,
     SystemConfigModule,
     AuthModule,
     ReferralModule,
     XpModule,
     FundsModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

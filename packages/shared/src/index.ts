@@ -14,11 +14,15 @@ export const bindInviterSchema = z.object({ inviterWalletAddress: ethereumAddres
 
 export const createDepositSchema = z.object({
   amount: z.string().regex(/^\d+(?:\.\d{1,18})?$/).refine((value) => new Decimal(value).gt(0)),
-  asset: z.enum(['USDC', 'USDT']),
+  asset: z.literal('USDC'),
   chainId: z.string().min(1).max(64),
   tokenDecimals: z.number().int().min(0).max(255),
-  externalRef: z.string().min(1).max(160),
+  clientReference: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
   idempotencyKey: z.string().min(8).max(128),
+});
+
+export const submitDepositTransactionSchema = z.object({
+  txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
 });
 
 export const SYSTEM_CONFIG_DEFAULTS = {

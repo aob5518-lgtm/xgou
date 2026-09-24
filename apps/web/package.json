@@ -16,10 +16,13 @@
   },
   "dependencies": {
     "@xgou/chains": "workspace:*",
+    "@xgou/contracts": "workspace:*",
     "@radix-ui/react-slot": "latest",
     "@react-three/drei": "latest",
     "@react-three/fiber": "latest",
     "@tanstack/react-query": "latest",
+    "@wagmi/core": "3.6.5",
+    "@walletconnect/ethereum-provider": "2.25.0",
     "class-variance-authority": "latest",
     "clsx": "latest",
     "decimal.js": "latest",
