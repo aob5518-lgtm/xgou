@@ -30,3 +30,7 @@ Runtime overrides such as `ARC_TESTNET_RPC_URL` are deployment concerns. Chain i
 ## XGOU deployment status
 
 `packages/contracts/deployments/arc-testnet.json` is the single deployment registry consumed by the backend and frontend. It currently records the contract version and official USDC address but remains `deployed: false` until an authorized `DEPLOYER_PRIVATE_KEY` is supplied. The application therefore keeps Testnet participation writes disabled rather than guessing or substituting contract addresses.
+
+The deployment script grants the deployer `DEFAULT_ADMIN_ROLE` and `PAUSER_ROLE` on the router, plus `DEFAULT_ADMIN_ROLE`, `TREASURY_ROLE`, and `PAUSER_ROLE` on all three vaults. Each vault grants `ROUTER_ROLE` only to the deployed `DepositRouter`. These assignments are asserted before the deployment script can succeed. Until a real deployment is recorded, no holder address is claimed here.
+
+**Mainnet migration requirement:** a deployer EOA must never retain long-lived Admin or Treasury authority on mainnet. A future mainnet phase must transfer privileged roles to the approved multisig/timelock controls, verify the transfers onchain, and revoke the deployer EOA before enabling any writes. `MAINNET_ENABLED`, `REAL_TRADING_ENABLED`, and `REAL_WITHDRAWALS_ENABLED` remain `false` in Phase 2B.

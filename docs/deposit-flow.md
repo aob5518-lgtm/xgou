@@ -24,9 +24,12 @@ sequenceDiagram
   F->>A: Submit transaction hash (never confirmation)
   I->>I: Scan finalized Arc blocks from persisted cursor
   I->>A: Match router, asset, wallet, amount, clientReference
+  I->>A: Recompute exact minimum-unit split from Deposit config version
   A->>L: Confirmation + 50/30/20 journals
   A->>X: Create Principal XP after ledger allocation
   D->>A: Read completed Testnet ledger data
 ```
 
 Arc deterministic finality means the indexer does not wait for an Ethereum-style confirmation count. It still uses a persisted block cursor and a unique `(chainId, txHash, logIndex)` event key so a replay is safe. A frontend-supplied transaction hash only moves a deposit to `TX_SUBMITTED`; only the matched event can move it to `CHAIN_CONFIRMED` and then `COMPLETED`.
+
+The Deposit stores the active SystemConfig version when its intent is created. Both event validation and ledger allocation reuse that immutable version, preventing a config change between intent creation and indexing from changing the financial split. A replay exits at the unique onchain event key before any ledger, Participation, or XP mutation.

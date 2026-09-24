@@ -49,6 +49,7 @@ jobs:
       MAINNET_ENABLED: "false"
       REAL_TRADING_ENABLED: "false"
       REAL_WITHDRAWALS_ENABLED: "false"
+      RECONCILIATION_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

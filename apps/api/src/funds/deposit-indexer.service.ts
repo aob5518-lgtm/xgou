@@ -7,6 +7,9 @@ import { depositAllocatedEvent } from '../chain/chain.constants.js';
 import { DeploymentRegistryService } from '../chain/deployment-registry.service.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { DepositService } from './deposit.service.js';
+import { SystemConfigService } from '../config/system-config.service.js';
+import type { SystemConfig } from '@xgou/shared';
+import { expectedMinimumUnitAllocation, findAllocationMismatch } from './allocation-validation.js';
 
 interface DepositAllocatedArgs {
   readonly depositId: Hex;
@@ -32,6 +35,7 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
     private readonly adapter: ArcChainAdapter,
     private readonly deployments: DeploymentRegistryService,
     private readonly deposits: DepositService,
+    private readonly configs: SystemConfigService,
   ) {}
 
   onModuleInit(): void {
@@ -81,7 +85,7 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async processLog(log: Log): Promise<number> {
+  async processLog(log: Log): Promise<number> {
     if (!log.transactionHash || !log.blockHash || log.blockNumber === null || log.logIndex === null) return 0;
     const transactionHash = log.transactionHash;
     const logIndex = log.logIndex;
@@ -138,12 +142,26 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
       },
     });
 
-    const mismatch = this.findMismatch(reference, args, log.address, transactionHash);
+    let effectiveConfig: SystemConfig | null = null;
+    let configError: string | null = null;
+    if (reference) {
+      if (reference.deposit.configVersion === null) {
+        configError = 'deposit has no system config version';
+      } else {
+        try {
+          effectiveConfig = (await this.configs.byVersion(reference.deposit.configVersion)).values;
+        } catch (error: unknown) {
+          configError = error instanceof Error ? error.message : 'system config lookup failed';
+        }
+      }
+    }
+    const mismatch = configError ?? this.findMismatch(reference, args, log.address, transactionHash, effectiveConfig);
     if (!reference || mismatch) {
+      const mismatchReason = mismatch ?? 'deposit intent not found';
       await this.prisma.db.$transaction(async (tx) => {
         await tx.onchainEvent.update({
           where: { id: event.id },
-          data: { status: 'REVIEW', processedAt: new Date(), error: mismatch ?? 'deposit intent not found' },
+          data: { status: 'REVIEW', processedAt: new Date(), error: mismatchReason },
         });
         if (reference) {
           await tx.deposit.update({ where: { id: reference.depositId }, data: { status: 'FAILED' } });
@@ -151,10 +169,29 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
             data: {
               userId: reference.deposit.userId,
               reason: 'ONCHAIN_DEPOSIT_MISMATCH',
-              evidence: { ...payload, error: mismatch },
+              evidence: { ...payload, error: mismatchReason },
               score: '100',
             },
           });
+          if (effectiveConfig && mismatchReason.includes('allocation mismatch')) {
+            const expected = expectedMinimumUnitAllocation(args.amount, effectiveConfig);
+            const scale = new Decimal(10).pow(this.chain.usdc.decimals);
+            const rows = [
+              { fundDomain: 'BULL' as const, expected: expected.bull, actual: args.bullAmount },
+              { fundDomain: 'SPOT' as const, expected: expected.spot, actual: args.spotAmount },
+              { fundDomain: 'FUTURES' as const, expected: expected.futures, actual: args.futuresAmount },
+            ];
+            await tx.reconciliationDifference.createMany({
+              data: rows.map((row) => ({
+                chainId: String(this.chain.id),
+                fundDomain: row.fundDomain,
+                internalBalance: new Decimal(row.expected.toString()).div(scale).toFixed(),
+                externalBalance: new Decimal(row.actual.toString()).div(scale).toFixed(),
+                difference: new Decimal(row.actual.toString()).minus(row.expected.toString()).div(scale).toFixed(),
+                severity: 'CRITICAL',
+              })),
+            });
+          }
         }
       });
       return 0;
@@ -187,11 +224,12 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
       readonly routerAddress: string;
       readonly assetAddress: string;
       readonly txHash: string | null;
-      readonly deposit: { readonly amount: { toString(): string } };
+      readonly deposit: { readonly amount: { toString(): string }; readonly configVersion: number | null };
     } | null,
     args: DepositAllocatedArgs,
     routerAddress: Address,
     transactionHash: Hash,
+    config: SystemConfig | null,
   ): string | null {
     if (!reference) return 'deposit intent not found';
     if (reference.routerAddress.toLowerCase() !== routerAddress.toLowerCase()) return 'wrong router';
@@ -200,6 +238,13 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
     const eventAmount = new Decimal(formatUnits(args.amount, this.chain.usdc.decimals));
     if (!eventAmount.eq(reference.deposit.amount.toString())) return 'wrong amount';
     if (args.bullAmount + args.spotAmount + args.futuresAmount !== args.amount) return 'onchain allocation is not conserved';
+    if (!config) return 'deposit system config is unavailable';
+    const allocationMismatch = findAllocationMismatch(
+      args.amount,
+      { bull: args.bullAmount, spot: args.spotAmount, futures: args.futuresAmount },
+      config,
+    );
+    if (allocationMismatch) return allocationMismatch;
     return null;
   }
 }

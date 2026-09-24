@@ -41,5 +41,19 @@ contract DeployArcTestnet {
         vm.stopBroadcast();
 
         require(router.bullBps() == 5_000 && router.spotBps() == 3_000 && router.futuresBps() == 2_000);
+        require(router.hasRole(router.DEFAULT_ADMIN_ROLE(), deployer), "router admin missing");
+        require(router.hasRole(router.PAUSER_ROLE(), deployer), "router pauser missing");
+        require(bull.hasRole(bull.DEFAULT_ADMIN_ROLE(), deployer), "bull admin missing");
+        require(spot.hasRole(spot.DEFAULT_ADMIN_ROLE(), deployer), "spot admin missing");
+        require(futures.hasRole(futures.DEFAULT_ADMIN_ROLE(), deployer), "futures admin missing");
+        require(bull.hasRole(bull.TREASURY_ROLE(), deployer), "bull treasury missing");
+        require(spot.hasRole(spot.TREASURY_ROLE(), deployer), "spot treasury missing");
+        require(futures.hasRole(futures.TREASURY_ROLE(), deployer), "futures treasury missing");
+        require(bull.hasRole(bull.PAUSER_ROLE(), deployer), "bull pauser missing");
+        require(spot.hasRole(spot.PAUSER_ROLE(), deployer), "spot pauser missing");
+        require(futures.hasRole(futures.PAUSER_ROLE(), deployer), "futures pauser missing");
+        require(bull.hasRole(bull.ROUTER_ROLE(), address(router)), "bull router missing");
+        require(spot.hasRole(spot.ROUTER_ROLE(), address(router)), "spot router missing");
+        require(futures.hasRole(futures.ROUTER_ROLE(), address(router)), "futures router missing");
     }
 }

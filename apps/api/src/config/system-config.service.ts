@@ -30,4 +30,17 @@ export class SystemConfigService {
       values: systemConfigSchema.parse({ ...SYSTEM_CONFIG_DEFAULTS, ...stored }),
     };
   }
+
+  async byVersion(version: number): Promise<EffectiveSystemConfig> {
+    const record = await this.prisma.db.systemConfigVersion.findUnique({ where: { version } });
+    if (!record) throw new Error(`system config version ${String(version)} was not found`);
+    const stored =
+      typeof record.values === 'object' && record.values !== null && !Array.isArray(record.values)
+        ? (record.values as Record<string, unknown>)
+        : {};
+    return {
+      version: record.version,
+      values: systemConfigSchema.parse({ ...SYSTEM_CONFIG_DEFAULTS, ...stored }),
+    };
+  }
 }

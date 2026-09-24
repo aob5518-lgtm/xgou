@@ -51,6 +51,10 @@ export class DepositService {
 
   async create(userId: string, input: CreateDepositInput, audit: AuditContext): Promise<DepositView> {
     await this.safety.assertDepositsEnabled();
+    const effectiveConfig = await this.configs.current();
+    if (effectiveConfig.version <= 0) {
+      throw new ConflictException('a persisted system config version is required before creating deposits');
+    }
     const chain = getChainConfig(process.env.CHAIN_ENV);
     if (input.chainId !== String(chain.id)) throw new ConflictException('deposit chain does not match CHAIN_ENV');
     if (input.asset !== chain.usdc.symbol || input.tokenDecimals !== chain.usdc.decimals) {
@@ -87,6 +91,7 @@ export class DepositService {
           asset: input.asset,
           chainId: input.chainId,
           tokenDecimals: input.tokenDecimals,
+          configVersion: effectiveConfig.version,
           externalRef: input.clientReference,
           idempotencyKey: input.idempotencyKey,
           status: 'AWAITING_APPROVAL',
@@ -163,10 +168,13 @@ export class DepositService {
   }
 
   async allocateConfirmed(depositId: string, allocationRequestId: string, audit: AuditContext): Promise<void> {
-    const effectiveConfig = await this.configs.current();
-    if (effectiveConfig.version <= 0) {
-      throw new ConflictException('a persisted system config version is required before allocating funds');
-    }
+    const configSnapshot = await this.prisma.db.deposit.findUnique({
+      where: { id: depositId },
+      select: { configVersion: true },
+    });
+    if (!configSnapshot) throw new NotFoundException('deposit not found');
+    if (configSnapshot.configVersion === null) throw new ConflictException('deposit has no persisted system config version');
+    const effectiveConfig = await this.configs.byVersion(configSnapshot.configVersion);
     await this.prisma.db.$transaction(async (tx) => {
       const deposit = await tx.deposit.findUnique({ where: { id: depositId } });
       if (!deposit) throw new NotFoundException('deposit not found');
