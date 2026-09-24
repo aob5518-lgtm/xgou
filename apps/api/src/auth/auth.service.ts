@@ -3,6 +3,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SiweMessage } from 'siwe';
 import { getAddress } from 'viem';
+import { getChainConfig } from '@xgou/chains';
 import { PrismaService } from '../database/prisma.service.js';
 import { sha256 } from '../common/hash.js';
 import type { AuditContext } from '../common/audit-context.js';
@@ -47,8 +48,8 @@ export class AuthService {
     if (!expectedUri || message.uri !== expectedUri) {
       throw new UnauthorizedException('SIWE URI does not match this application');
     }
-    const expectedChainId = Number(process.env.SIWE_CHAIN_ID);
-    if (!Number.isSafeInteger(expectedChainId) || message.chainId !== expectedChainId) {
+    const expectedChainId = getChainConfig(process.env.CHAIN_ENV).id;
+    if (message.chainId !== expectedChainId) {
       throw new UnauthorizedException('SIWE chain is not allowed');
     }
     const nonceRecord = await this.prisma.db.authNonce.findUnique({

@@ -20,6 +20,7 @@
     "@nestjs/platform-express": "latest",
     "@nestjs/throttler": "latest",
     "@xgou/database": "workspace:*",
+    "@xgou/chains": "workspace:*",
     "@xgou/ledger": "workspace:*",
     "@xgou/referral-engine": "workspace:*",
     "@xgou/shared": "workspace:*",

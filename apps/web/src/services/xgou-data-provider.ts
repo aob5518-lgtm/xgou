@@ -1,4 +1,5 @@
 import { demoData, type DemoData } from '@/lib/demo-data';
+import { getAccessToken } from '@/services/auth-session';
 
 export interface XgouDataProvider {
   getDashboard(): Promise<DemoData['dashboard']>;
@@ -24,7 +25,11 @@ export class ApiXgouDataProvider implements XgouDataProvider {
   constructor(private readonly baseUrl: string) {}
 
   private async get<T>(path: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, { credentials: 'include' });
+    const accessToken = getAccessToken();
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      credentials: 'include',
+      headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {},
+    });
     if (!response.ok) throw new Error(`XGOU API request failed: ${String(response.status)}`);
     return response.json() as Promise<T>;
   }

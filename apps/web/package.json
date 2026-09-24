@@ -15,6 +15,7 @@
     "test:integration": "vitest run src/test/routes.integration.spec.tsx"
   },
   "dependencies": {
+    "@xgou/chains": "workspace:*",
     "@radix-ui/react-slot": "latest",
     "@react-three/drei": "latest",
     "@react-three/fiber": "latest",
