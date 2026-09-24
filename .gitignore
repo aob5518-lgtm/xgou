@@ -14,3 +14,5 @@ packages/database/generated
 packages/contracts/cache
 packages/contracts/out
 packages/contracts/broadcast
+.vercel
+.env*

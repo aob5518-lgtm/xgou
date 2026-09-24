@@ -1,0 +1,12 @@
+.git
+.vercel
+.turbo
+.env*
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/*.tsbuildinfo
+packages/contracts/cache
+packages/contracts/out
+packages/contracts/broadcast
