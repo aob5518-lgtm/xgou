@@ -28,7 +28,16 @@ The canvas is dynamically imported with SSR disabled. Dashboard uses a lower par
 
 ## Vercel deployment
 
-Import the GitHub repository with repository root as Vercel Root Directory. Select Next.js, use `pnpm install --frozen-lockfile`, and set the Build Command to `pnpm --filter @xgou/web build`. Leave Output Directory empty so Vercel uses the Next.js default. Use Node.js 22 and copy only the public values from `apps/web/.env.example`.
+Import `aob5518-lgtm/xgou` and configure Vercel with these settings:
+
+- Root Directory: `apps/web`
+- Framework Preset: Next.js
+- Node.js: 22
+- Install Command: Vercel default (`pnpm install`); use `pnpm install --frozen-lockfile` only if workspace detection requires an explicit command
+- Build Command: `pnpm build`
+- Output Directory: leave empty to use the Next.js default
+
+Preview deployments require only the four public values in `apps/web/.env.example`. `NEXT_PUBLIC_API_URL` is retained as the future API boundary, but it is not requested or used by pages while `NEXT_PUBLIC_DEMO_MODE=true`. Do not add database credentials, JWT secrets, private keys, exchange keys, or RPC secrets to the frontend deployment.
 
 ## Future API integration
 

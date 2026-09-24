@@ -82,17 +82,17 @@ pnpm --filter @xgou/web dev
 
 ## Vercel Deployment
 
-推荐用 repository root 导入 `aob5518-lgtm/xgou`：
+导入 `aob5518-lgtm/xgou` 并使用以下设置：
 
-- Root Directory: repository root
+- Root Directory: `apps/web`
 - Framework Preset: Next.js
-- Install Command: `pnpm install --frozen-lockfile`
-- Build Command: `pnpm --filter @xgou/web build`
+- Install Command: Vercel 默认 `pnpm install`；仅在 workspace 无法自动识别时显式设为 `pnpm install --frozen-lockfile`
+- Build Command: `pnpm build`
 - Output Directory: Next.js default（留空）
 - Node.js: 22
 - Environment: 按 `apps/web/.env.example` 配置四个公开变量
 
-选择 repository root 能保持 pnpm workspace lockfile 和 Turborepo 行为一致。
+Preview 保持 `NEXT_PUBLIC_DEMO_MODE=true`，因此页面不会请求 `NEXT_PUBLIC_API_URL`，也不依赖 API、PostgreSQL、Redis 或 RPC 才能渲染。前端部署不得加入数据库、JWT、私钥、交易所或 RPC Secret。
 
 ## Authentication API
 
