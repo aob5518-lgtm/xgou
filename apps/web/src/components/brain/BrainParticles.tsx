@@ -17,11 +17,14 @@ function brainSurface(count: number, side: -1 | 1, layer: 'surface' | 'core') {
     const sx = Math.sin(latitude) * Math.cos(theta);
     const sy = Math.cos(latitude);
     const sz = Math.sin(latitude) * Math.sin(theta);
-    const fold = 1 + .075 * Math.sin(theta * 5 + sy * 7) + .045 * Math.sin(theta * 9 - sy * 11);
-    const cleft = .18 + Math.pow(Math.abs(sy), 1.8) * .06;
-    const lobe = 1 + .07 * Math.sin(sy * 8) * Math.cos(theta * 3);
-    points[index * 3] = side * (cleft + Math.abs(sx) * 1.22 * fold * layerScale);
-    points[index * 3 + 1] = sy * 1.18 * lobe * layerScale;
+    const fold = 1 + .08 * Math.sin(theta * 5 + sy * 7) + .05 * Math.sin(theta * 9 - sy * 11);
+    const cleft = .17 + (1 - Math.abs(sy)) * .025;
+    const sideBulge = Math.pow(Math.abs(sx), .76);
+    const topIrregularity = Math.max(0, sy) * (.032 * Math.sin(theta * 4) + .022 * Math.cos(theta * 7));
+    let shapedY = Math.sign(sy) * Math.pow(Math.abs(sy), .82) * 1.14 + topIrregularity;
+    if (shapedY < -.87) shapedY = -.87 + (shapedY + .87) * .22;
+    points[index * 3] = side * (cleft + sideBulge * 1.2 * fold * layerScale);
+    points[index * 3 + 1] = shapedY * layerScale;
     points[index * 3 + 2] = sz * .92 * fold * layerScale;
   }
   return points;
@@ -71,7 +74,7 @@ function SynapseBridge({ active }: { readonly active: boolean }) {
 }
 
 export default function BrainParticles({ compact = false, focus = null }: { readonly compact?: boolean; readonly focus?: BrainFocus }) {
-  const count = compact ? 560 : 1500;
+  const count = compact ? 630 : 1690;
   return <Canvas camera={{ position: [0, 0, compact ? 4.7 : 4.05], fov: compact ? 43 : 40 }} dpr={[1, compact ? 1.2 : 1.55]} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}>
     <fog attach="fog" args={['#050607', 3.2, 7]} /><Hemisphere side={-1} count={count} focus={focus} /><Hemisphere side={1} count={count} focus={focus} /><SynapseBridge active={focus === 'core'} />
   </Canvas>;

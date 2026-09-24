@@ -8,7 +8,7 @@ import DashboardPage from '@/app/(app)/dashboard/page';
 describe('dashboard', () => {
   it('renders demo portfolio, all fund domains and safety labeling', async () => {
     render(await DashboardPage());
-    expect(screen.getByText('Command overview')).toBeInTheDocument();
+    expect(screen.getByText('资产总览')).toBeInTheDocument();
     expect(screen.getByText('BULL FUND')).toBeInTheDocument();
     expect(screen.getByText('SPOT STRATEGY')).toBeInTheDocument();
     expect(screen.getByText('FUTURES TREND')).toBeInTheDocument();

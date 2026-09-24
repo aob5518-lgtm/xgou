@@ -5,14 +5,22 @@ import { motion } from 'framer-motion';
 import type { ActivityItem } from '@/lib/demo-data';
 
 const updates: readonly Omit<ActivityItem, 'time'>[] = [
-  { agent: 'Risk Agent', message: 'Exposure limits checked. No action required.', status: 'NORMAL' },
-  { agent: 'Research Agent', message: 'Market breadth model refreshed.', status: 'SIGNAL LOGGED' },
-  { agent: 'Spot Agent', message: 'Liquidity threshold verified for active assets.', status: 'MONITORING' },
-  { agent: 'Futures Trend Agent', message: 'No trend entry passed the current risk gate.', status: 'NO ACTION' },
+  { agent: 'Risk Agent', message: '已完成敞口上限检查，无需执行操作。', status: 'NORMAL' },
+  { agent: 'Research Agent', message: '市场广度模型已刷新。', status: 'SIGNAL LOGGED' },
+  { agent: 'Spot Agent', message: '已核验活跃资产流动性阈值。', status: 'MONITORING' },
+  { agent: 'Futures Trend Agent', message: '当前没有趋势入场信号通过风控门槛。', status: 'NO ACTION' },
 ];
 
+const messageTranslations: Readonly<Record<string, string>> = {
+  'Market volatility increased.': '市场波动率上升。',
+  'Reduced BTC exposure by 8%.': 'BTC 敞口降低 8%。',
+  'Detected increasing stablecoin inflow.': '检测到稳定币资金流入增加。',
+  'BTC trend signal detected.': '检测到 BTC 趋势信号。',
+  'Liquidity reserves verified across all fund domains.': '已完成各资金域流动性储备核验。',
+};
+
 export function ActivityFeed({ initial }: { readonly initial: readonly ActivityItem[] }) {
-  const [items, setItems] = useState(initial);
+  const [items, setItems] = useState(() => initial.map((item) => ({ ...item, message: messageTranslations[item.message] ?? item.message })));
   useEffect(() => {
     let index = 0;
     const timer = window.setInterval(() => {
