@@ -67,6 +67,17 @@ export class ReconciliationService implements OnModuleInit, OnModuleDestroy {
         const external = new Decimal(externalRaw.toString()).div(new Decimal(10).pow(chain.usdc.decimals));
         const difference = external.minus(internal);
         const severity = difference.abs().gt(dust) ? 'CRITICAL' as const : 'INFO' as const;
+        if (severity !== 'CRITICAL') {
+          await this.prisma.db.reconciliationDifference.updateMany({
+            where: {
+              chainId: String(chain.id),
+              fundDomain: domain.fundDomain,
+              severity: 'CRITICAL',
+              status: 'OPEN',
+            },
+            data: { status: 'RESOLVED', resolvedAt: new Date() },
+          });
+        }
         if (!difference.isZero()) {
           await this.prisma.db.reconciliationDifference.create({
             data: {

@@ -6,6 +6,7 @@ dist
 coverage
 .env
 .env.local
+.env.arc-testnet
 packages/database/generated
 *.log
 .DS_Store

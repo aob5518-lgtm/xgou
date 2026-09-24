@@ -13,6 +13,8 @@ import type { AuthenticatedUser } from './auth.types.js';
 const NONCE_TTL_MS = 5 * 60 * 1000;
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 
+export const createSiweNonce = (): string => randomBytes(18).toString('hex');
+
 export interface SessionTokens {
   readonly accessToken: string;
   readonly refreshToken: string;
@@ -28,7 +30,7 @@ export class AuthService {
 
   async createNonce(walletAddress: string): Promise<{ nonce: string; expiresAt: string }> {
     const normalized = getAddress(walletAddress.toLowerCase()).toLowerCase();
-    const nonce = randomBytes(18).toString('base64url');
+    const nonce = createSiweNonce();
     const expiresAt = new Date(Date.now() + NONCE_TTL_MS);
     await this.prisma.db.authNonce.create({
       data: { walletAddress: normalized, nonceHash: sha256(nonce), expiresAt },

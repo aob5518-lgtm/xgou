@@ -1,21 +1,29 @@
 {
   "networkKey": "arc-testnet",
   "chainId": 5042002,
-  "deployed": false,
-  "deployedAt": null,
-  "deploymentBlock": null,
-  "deployer": null,
-  "depositRouter": null,
-  "bullVault": null,
-  "spotVault": null,
-  "futuresVault": null,
+  "deployed": true,
+  "deployedAt": "2026-09-24T15:21:29.000Z",
+  "deploymentBlock": 63784132,
+  "deployer": "0xEC37B02109f0ab1ae2cf094eA328d24ae5c826E9",
+  "depositRouter": "0x5Ae649A4218546753c5e99C4F39d84A38be24D08",
+  "bullVault": "0x8A1d9bEc810d134F637dE30bFc0ECdd7783F3c3e",
+  "spotVault": "0x149e8921b5a0bd8e005DA4453A5Fa53738bdC071",
+  "futuresVault": "0xe80C8AeA77f487b20B40426a54729F85653A9879",
   "usdc": "0x3600000000000000000000000000000000000000",
-  "txHashes": {},
+  "txHashes": {
+    "bullVault": "0xae90827d0edf0c0495889163cd94d05c2c7b25bf8fb258ec71e48e86647b4386",
+    "spotVault": "0xaa370311c503677ecbe55d05216fb2c67e51732c840afc93bab6716088bc5c63",
+    "futuresVault": "0x2e4dd3df45a9908c0234b733c8abfe600c739accea0cbe400cc7fcff2254ecd9",
+    "depositRouter": "0x5c4f7c5eb791562f2825e7bdf7f5cc361e58a032f6ae5184bc59d6bd6a3acc30",
+    "bullRouterRole": "0x620675c485bd710e92b48d83513a8004c1b25b53aada154b319867ef044b31f7",
+    "spotRouterRole": "0x7e8a5f2ed68aa0c7dd247fac3f9370dc229902301de1c42eb48c2705a103438f",
+    "futuresRouterRole": "0x3a7ead6aec538c86bdaba0e2652d80c4d89eb67e4cb6904e2c8eab936bbc3d3c"
+  },
   "contractVersions": {
     "depositRouter": "1.0.0",
     "bullVault": "1.0.0",
     "spotVault": "1.0.0",
     "futuresVault": "1.0.0"
   },
-  "verified": false
+  "verified": true
 }

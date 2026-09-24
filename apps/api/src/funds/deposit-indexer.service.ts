@@ -10,6 +10,7 @@ import { DepositService } from './deposit.service.js';
 import { SystemConfigService } from '../config/system-config.service.js';
 import type { SystemConfig } from '@xgou/shared';
 import { expectedMinimumUnitAllocation, findAllocationMismatch } from './allocation-validation.js';
+import { sha256 } from '../common/hash.js';
 
 interface DepositAllocatedArgs {
   readonly depositId: Hex;
@@ -98,8 +99,9 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
           where: { id: existing.id },
           data: { status: 'REVIEW', error: 'block hash mismatch for finalized Arc event' },
         });
+        return 0;
       }
-      return 0;
+      if (existing.status !== 'FINALIZED') return 0;
     }
 
     let args: DepositAllocatedArgs;
@@ -128,7 +130,7 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
       },
       include: { deposit: true },
     });
-    const event = await this.prisma.db.onchainEvent.create({
+    const event = existing ?? await this.prisma.db.onchainEvent.create({
       data: {
         chainId: String(this.chain.id),
         contractAddress: log.address.toLowerCase(),
@@ -210,7 +212,7 @@ export class DepositIndexer implements OnModuleInit, OnModuleDestroy {
     await this.deposits.allocateConfirmed(
       reference.depositId,
       `arc:${String(this.chain.id)}:${transactionHash}:${String(logIndex)}`,
-      { requestId: `indexer:${transactionHash}:${String(logIndex)}`, ipHash: 'system' },
+      { requestId: sha256(`indexer:${transactionHash}:${String(logIndex)}`), ipHash: 'system' },
     );
     await this.prisma.db.onchainEvent.update({
       where: { id: event.id },

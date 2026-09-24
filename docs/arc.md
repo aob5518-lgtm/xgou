@@ -29,8 +29,20 @@ Runtime overrides such as `ARC_TESTNET_RPC_URL` are deployment concerns. Chain i
 
 ## XGOU deployment status
 
-`packages/contracts/deployments/arc-testnet.json` is the single deployment registry consumed by the backend and frontend. It currently records the contract version and official USDC address but remains `deployed: false` until an authorized `DEPLOYER_PRIVATE_KEY` is supplied. The application therefore keeps Testnet participation writes disabled rather than guessing or substituting contract addresses.
+`packages/contracts/deployments/arc-testnet.json` is the single deployment registry consumed by the backend and frontend. XGOU was deployed to Arc Testnet at block `63784132` on 2026-09-24 using the official USDC ERC-20 interface.
 
-The deployment script grants the deployer `DEFAULT_ADMIN_ROLE` and `PAUSER_ROLE` on the router, plus `DEFAULT_ADMIN_ROLE`, `TREASURY_ROLE`, and `PAUSER_ROLE` on all three vaults. Each vault grants `ROUTER_ROLE` only to the deployed `DepositRouter`. These assignments are asserted before the deployment script can succeed. Until a real deployment is recorded, no holder address is claimed here.
+| Contract | Address |
+| --- | --- |
+| DepositRouter | `0x5Ae649A4218546753c5e99C4F39d84A38be24D08` |
+| BullVault | `0x8A1d9bEc810d134F637dE30bFc0ECdd7783F3c3e` |
+| SpotStrategyVault | `0x149e8921b5a0bd8e005DA4453A5Fa53738bdC071` |
+| FuturesStrategyVault | `0xe80C8AeA77f487b20B40426a54729F85653A9879` |
+| Deployer | `0xEC37B02109f0ab1ae2cf094eA328d24ae5c826E9` |
+
+The real Arc Testnet E2E deposit transaction is [`0x362328fc8b7de60a762a0541ba3556e41fe4bf4b2ff05e4614c501775989db55`](https://explorer.testnet.arc.io/tx/0x362328fc8b7de60a762a0541ba3556e41fe4bf4b2ff05e4614c501775989db55) at block `63786121`. A `10 USDC` intent produced `5 Bull`, `3 Spot`, `2 Futures`, and `10 Principal XP`. The Indexer recorded log index `30`; a manual replay left the Ledger, Participation, and XP counts unchanged. Reconciliation subsequently passed with zero difference in all three domains.
+
+Source verification is complete for all four contracts. DepositRouter and SpotStrategyVault are verified directly in Arc Explorer/Blockscout. BullVault and FuturesStrategyVault returned Sourcify `exact_match`; Arc Explorer's anonymous verification endpoint was rate-limited during submission, although both addresses, creation transactions, and bytecode remain visible there. The deployment registry therefore records `verified: true` based on public exact source matches, without claiming that every source has already been imported into Blockscout.
+
+The deployment script granted `0xEC37B02109f0ab1ae2cf094eA328d24ae5c826E9` `DEFAULT_ADMIN_ROLE`, `ALLOCATOR_ROLE`, and `PAUSER_ROLE` on the router, plus `DEFAULT_ADMIN_ROLE`, `TREASURY_ROLE`, and `PAUSER_ROLE` on all three vaults. Each vault grants `ROUTER_ROLE` to `0x5Ae649A4218546753c5e99C4F39d84A38be24D08`. These assignments and the `5000/3000/2000` BPS split were read back from Arc Testnet after deployment. The deployer EOA therefore currently has Testnet Treasury authority; this is intentional and is not hidden.
 
 **Mainnet migration requirement:** a deployer EOA must never retain long-lived Admin or Treasury authority on mainnet. A future mainnet phase must transfer privileged roles to the approved multisig/timelock controls, verify the transfers onchain, and revoke the deployer EOA before enabling any writes. `MAINNET_ENABLED`, `REAL_TRADING_ENABLED`, and `REAL_WITHDRAWALS_ENABLED` remain `false` in Phase 2B.
