@@ -28,4 +28,19 @@ describe('spot risk engine', () => {
     expect(deriveCircuitState('0', '-0.15', config)).toBe('RISK_OFF');
   });
   it('allows EXIT while risk-off', () => { expect(evaluateSpotRisk({ ...proposal, side: 'EXIT' }, { ...context, circuitState: 'RISK_OFF' }, config).decision).toBe('APPROVED'); });
+  it('allows EXIT while paused', () => { expect(evaluateSpotRisk({ ...proposal, side: 'EXIT' }, { ...context, circuitState: 'PAUSED' }, config).decision).toBe('APPROVED'); });
+  it('rejects BUY while risk-off', () => { expect(evaluateSpotRisk(proposal, { ...context, circuitState: 'RISK_OFF' }, config).reasonCodes).toContain('CIRCUIT_RISK_OFF'); });
+  it('reduces BUY notional while reduced-risk', () => {
+    const result = evaluateSpotRisk(proposal, { ...context, circuitState: 'REDUCED_RISK' }, config);
+    expect(result.decision).toBe('REDUCED');
+    expect(result.approvedNotional).toBe('150');
+  });
+  it('pauses at the configured weekly loss threshold', () => {
+    expect(deriveCircuitState('0', '-0.01', config, true, '-0.05', config.maxWeeklyLoss)).toBe('PAUSED');
+  });
+  it('does not allow stale prices to force an EXIT', () => {
+    const result = evaluateSpotRisk({ ...proposal, side: 'EXIT', marketDataTimestamp: 0 }, { ...context, circuitState: 'PAUSED' }, config);
+    expect(result.reasonCodes).toContain('STALE_MARKET_DATA');
+    expect(result.decision).toBe('REJECTED');
+  });
 });

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { applyPaperFill, LiveExchangeAdapter, markPaperNav, PaperSpotExchangeAdapter } from './index.js';
+import {
+  applyPaperFill, calculatePeriodPnl, LiveExchangeAdapter, markPaperNav,
+  PaperSpotExchangeAdapter, rebalancePaperCapital, utcDayStart, utcWeekStart,
+} from './index.js';
 import type { RiskEvaluation } from '@xgou/risk-engine';
 import { evaluateSpotRisk } from '@xgou/risk-engine';
 import { createHistoricalFixture, type Candle } from '@xgou/market-data';
@@ -37,6 +40,85 @@ describe('paper spot execution and accounting', () => {
     expect(result.position.quantity).toBe('0.0025');
     expect(result.realizedPnlDelta).toBe('14.835');
     expect(markPaperNav(result.account, [{ ...result.position, currentPrice: '66000' }]).unrealizedPnl).toBe('15');
+  });
+
+  it('marks an open position up and down without another trade', () => {
+    const account = { cashBalance: '2100', reserveBalance: '600', realizedPnl: '0', highWaterMark: '3000' };
+    const position = { symbol: 'BTC/USDC', quantity: '3', averageEntryPrice: '100', realizedPnl: '0' };
+    const up = markPaperNav(account, [{ ...position, currentPrice: '110' }]);
+    expect(up.marketValue).toBe('330');
+    expect(up.unrealizedPnl).toBe('30');
+    expect(up.equity).toBe('3030');
+    const down = markPaperNav({ ...account, highWaterMark: up.highWaterMark }, [{ ...position, currentPrice: '80' }]);
+    expect(down.equity).toBe('2940');
+    expect(down.drawdown).toBe(new Decimal(2940).minus(3030).div(3030).toFixed());
+  });
+
+  it('rebalances reserve ratios with strict capital conservation', () => {
+    const initial = rebalancePaperCapital({ allocatedCapital: '0', activeCapital: '0', cashBalance: '0', reserveBalance: '0' }, '3000', '0.20');
+    expect(initial).toEqual({ allocatedCapital: '3000', activeCapital: '2400', cashBalance: '2400', reserveBalance: '600' });
+    const changed = rebalancePaperCapital(initial, '3000', '0.25');
+    expect(changed).toEqual({ allocatedCapital: '3000', activeCapital: '2250', cashBalance: '2250', reserveBalance: '750' });
+    expect(new Decimal(changed.activeCapital).plus(changed.reserveBalance).toString()).toBe(changed.allocatedCapital);
+  });
+
+  it('calculates UTC daily and Monday-based weekly PnL baselines', () => {
+    const now = new Date('2026-09-25T12:00:00.000Z');
+    const day = calculatePeriodPnl('2970', { openingNav: '3000', baselineAt: new Date('2026-09-25T00:00:00.000Z') }, utcDayStart(now));
+    const week = calculatePeriodPnl('2850', { openingNav: '3000', baselineAt: new Date('2026-09-21T00:00:00.000Z') }, utcWeekStart(now));
+    expect(day.pnl).toBe('-30');
+    expect(day.pnlRatio).toBe('-0.01');
+    expect(week.pnl).toBe('-150');
+    expect(week.pnlRatio).toBe('-0.05');
+    const reset = calculatePeriodPnl('3100', { openingNav: '3000', baselineAt: new Date('2026-09-24T00:00:00.000Z') }, utcDayStart(now));
+    expect(reset).toMatchObject({ openingNav: '3100', pnl: '0', pnlRatio: '0' });
+  });
+
+  it('charges SELL fee from actual executed notional', async () => {
+    const fill = await adapter.execute(
+      { orderId: 'sell-fee', symbol: 'BTC/USDC', side: 'SELL', notional: '300', quantity: '1' },
+      approved,
+      { price: '100', liquidity: '10000000', timestamp: 3 },
+    );
+    expect(new Decimal(fill.notional).lt(100)).toBe(true);
+    expect(fill.fee).toBe(new Decimal(fill.notional).mul('0.001').toFixed());
+  });
+
+  it('uses weighted average cost across two buys, partial sell and full exit', () => {
+    const baseAccount = { cashBalance: '3000', realizedPnl: '0', highWaterMark: '3000' };
+    const empty = { symbol: 'BTC/USDC', quantity: '0', averageEntryPrice: '0', realizedPnl: '0' };
+    const buyA = applyPaperFill(baseAccount, empty, { orderId: 'a', symbol: 'BTC/USDC', side: 'BUY', quantity: '1', price: '100', notional: '100', fee: '0', slippage: '0', timestamp: 1, sourcePrice: '100' });
+    const buyB = applyPaperFill(buyA.account, buyA.position, { orderId: 'b', symbol: 'BTC/USDC', side: 'BUY', quantity: '1', price: '120', notional: '120', fee: '0', slippage: '0', timestamp: 2, sourcePrice: '120' });
+    expect(buyB.position.averageEntryPrice).toBe('110');
+    const partial = applyPaperFill(buyB.account, buyB.position, { orderId: 'c', symbol: 'BTC/USDC', side: 'SELL', quantity: '0.5', price: '130', notional: '65', fee: '0.065', slippage: '0', timestamp: 3, sourcePrice: '130' });
+    expect(partial.position.averageEntryPrice).toBe('110');
+    expect(partial.realizedPnlDelta).toBe('9.935');
+    const exitNotional = new Decimal(partial.position.quantity).mul(90);
+    const closed = applyPaperFill(partial.account, partial.position, { orderId: 'd', symbol: 'BTC/USDC', side: 'SELL', quantity: partial.position.quantity, price: '90', notional: exitNotional.toFixed(), fee: exitNotional.mul('0.001').toFixed(), slippage: '0', timestamp: 4, sourcePrice: '90' });
+    expect(closed.position.quantity).toBe('0');
+    expect(closed.position.averageEntryPrice).toBe('0');
+    expect(markPaperNav(closed.account, []).unrealizedPnl).toBe('0');
+  });
+
+  it('runs stop-loss EXIT through risk, paper SELL and position close', async () => {
+    const candles = createHistoricalFixture('BTC/USDC', '100', 100);
+    const marketPrice = candles.at(-1)?.close ?? '94';
+    const signal = evaluateSpotSwingV1(candles, undefined, '1', new Decimal(marketPrice).plus(1).toFixed());
+    expect(signal).toMatchObject({ signalType: 'EXIT', reason: 'STOP_LOSS' });
+    const decision = evaluateSpotRisk({ symbol: signal.symbol, side: 'EXIT', targetNotional: marketPrice, currentExposure: marketPrice, expectedPrice: marketPrice, maxSlippage: '0.005', marketDataTimestamp: signal.marketDataTimestamp }, {
+      equity: '100', cashBalance: '0', reserveAmount: '0', currentTotalExposure: marketPrice, assetExposure: marketPrice,
+      dailyPnlRatio: '-0.06', weeklyPnlRatio: '-0.06', drawdown: '-0.16', volatility: '0.02', marketLiquidity: '10000000',
+      estimatedSlippage: '0.001', now: signal.marketDataTimestamp, circuitState: 'RISK_OFF',
+    }, {
+      allowedAssets: ['BTC/USDC'], maxSingleAssetExposure: '1', maxTotalSpotExposure: '1', maxPositionSize: '1', maxTradeSize: '1', maxOrderNotional: '1000',
+      maxDailyLoss: '0.02', pauseDailyLoss: '0.03', maxWeeklyLoss: '0.05', maxDrawdown: '0.15', maxSlippage: '0.005',
+      minLiquidity: '100000', maxVolatility: '0.08', stalePriceSeconds: 30, liquidityReserve: '0.20',
+    });
+    expect(decision.decision).toBe('APPROVED');
+    const fill = await adapter.execute({ orderId: 'stop', symbol: signal.symbol, side: 'SELL', notional: marketPrice, quantity: '1' }, decision, { price: marketPrice, liquidity: '10000000', timestamp: signal.marketDataTimestamp });
+    const result = applyPaperFill({ cashBalance: '0', realizedPnl: '0', highWaterMark: '100' }, { symbol: signal.symbol, quantity: fill.quantity, averageEntryPrice: new Decimal(marketPrice).mul('1.05').toFixed(), realizedPnl: '0' }, fill);
+    expect(result.position.quantity).toBe('0');
+    expect(new Decimal(result.realizedPnlDelta).lt(0)).toBe(true);
   });
 
   it('refuses to instantiate any live adapter while the gate is false', () => {

@@ -10,6 +10,10 @@ const phase2MigrationPath = new URL(
   '../prisma/migrations/20260922043000_phase2a_fund_ledger/migration.sql',
   import.meta.url,
 );
+const spotRuntimeMigrationPath = new URL(
+  '../prisma/migrations/20260925120000_finalize_spot_paper_runtime/migration.sql',
+  import.meta.url,
+);
 
 describe('Phase 1 database artifacts', () => {
   it('stores asset and XP amounts as Decimal and defines the referral closure identity', async () => {
@@ -44,5 +48,27 @@ describe('Phase 2A fund and ledger database artifacts', () => {
     expect(migration).toContain('LedgerAccount_identity_immutable');
     expect(migration).toContain('LedgerAccount_fund_domain_boundary');
     expect(migration).toContain('FundAllocation_ratio_valid');
+  });
+});
+
+describe('Phase 3A paper runtime persistence', () => {
+  it('persists mark, stop, daily and weekly recovery state', async () => {
+    const [schema, migration] = await Promise.all([
+      readFile(schemaPath, 'utf8'),
+      readFile(spotRuntimeMigrationPath, 'utf8'),
+    ]);
+    for (const field of ['markedAt', 'stopLoss', 'takeProfit', 'dailyOpeningNav', 'dailyBaselineAt', 'weeklyOpeningNav', 'weeklyBaselineAt']) {
+      expect(schema).toContain(field);
+      expect(migration).toContain(`"${field}"`);
+    }
+  });
+
+  it('persists restart recovery state and rejects duplicate strategy cycles', async () => {
+    const schema = await readFile(schemaPath, 'utf8');
+    expect(schema).toContain('model CircuitBreakerState');
+    expect(schema).toContain('dailyBaselineAt');
+    expect(schema).toContain('weeklyBaselineAt');
+    expect(schema).toContain('markedAt');
+    expect(schema).toContain('@@unique([strategyId, cycleId])');
   });
 });

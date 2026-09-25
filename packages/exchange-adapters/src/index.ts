@@ -55,12 +55,12 @@ export class PaperSpotExchangeAdapter implements ExchangeAdapter {
     const slippageBps = Decimal.min(this.config.maxSlippageBps, new Decimal(this.config.baseSlippageBps).plus(impact));
     const slippageRatio = slippageBps.div(10_000);
     const fillPrice = order.side === 'BUY' ? sourcePrice.mul(slippageRatio.plus(1)) : sourcePrice.mul(new Decimal(1).minus(slippageRatio));
-    const fee = grossNotional.mul(this.config.tradingFeeBps).div(10_000);
     const quantity = order.side === 'BUY'
-      ? grossNotional.minus(fee).div(fillPrice)
+      ? grossNotional.minus(grossNotional.mul(this.config.tradingFeeBps).div(10_000)).div(fillPrice)
       : Decimal.min(new Decimal(order.quantity ?? 0), grossNotional.div(fillPrice));
     if (quantity.lte(0)) throw new Error('paper fill quantity must be positive');
     const notional = order.side === 'BUY' ? grossNotional : quantity.mul(fillPrice);
+    const fee = notional.mul(this.config.tradingFeeBps).div(10_000);
     return Promise.resolve({
       orderId: order.orderId, symbol: order.symbol, side: order.side, quantity: quantity.toFixed(),
       price: fillPrice.toFixed(), notional: notional.toFixed(), fee: fee.toFixed(),
@@ -73,6 +73,7 @@ export interface PaperAccountState {
   readonly cashBalance: string;
   readonly realizedPnl: string;
   readonly highWaterMark: string;
+  readonly reserveBalance?: string;
 }
 
 export interface PaperPositionState {
@@ -136,10 +137,69 @@ export const markPaperNav = (
 ): { readonly marketValue: string; readonly equity: string; readonly unrealizedPnl: string; readonly highWaterMark: string; readonly drawdown: string } => {
   const marketValue = positions.reduce((sum, position) => sum.plus(new Decimal(position.quantity).mul(position.currentPrice)), new Decimal(0));
   const costBasis = positions.reduce((sum, position) => sum.plus(new Decimal(position.quantity).mul(position.averageEntryPrice)), new Decimal(0));
-  const equity = new Decimal(account.cashBalance).plus(marketValue);
+  const equity = new Decimal(account.cashBalance).plus(account.reserveBalance ?? 0).plus(marketValue);
   const highWaterMark = Decimal.max(account.highWaterMark, equity);
   const drawdown = highWaterMark.isZero() ? new Decimal(0) : equity.minus(highWaterMark).div(highWaterMark);
   return { marketValue: marketValue.toFixed(), equity: equity.toFixed(), unrealizedPnl: marketValue.minus(costBasis).toFixed(), highWaterMark: highWaterMark.toFixed(), drawdown: drawdown.toFixed() };
+};
+
+export interface PaperCapitalState {
+  readonly allocatedCapital: string;
+  readonly activeCapital: string;
+  readonly cashBalance: string;
+  readonly reserveBalance: string;
+}
+
+export const rebalancePaperCapital = (
+  account: PaperCapitalState,
+  allocatedCapital: Decimal.Value,
+  reserveRatio: Decimal.Value,
+): PaperCapitalState => {
+  const allocated = new Decimal(allocatedCapital);
+  const ratio = new Decimal(reserveRatio);
+  if (allocated.lt(0) || ratio.lt(0) || ratio.gt(1)) throw new Error('invalid paper capital allocation');
+  const reserve = allocated.mul(ratio);
+  const active = allocated.minus(reserve);
+  const cash = new Decimal(account.cashBalance).plus(active.minus(account.activeCapital));
+  if (!active.plus(reserve).eq(allocated)) throw new Error('paper capital conservation failed');
+  return {
+    allocatedCapital: allocated.toFixed(), activeCapital: active.toFixed(),
+    cashBalance: cash.toFixed(), reserveBalance: reserve.toFixed(),
+  };
+};
+
+export interface PeriodPnlState {
+  readonly openingNav: string;
+  readonly baselineAt: Date | null;
+}
+
+export interface PeriodPnlResult extends PeriodPnlState {
+  readonly pnl: string;
+  readonly pnlRatio: string;
+}
+
+export const utcDayStart = (value: Date): Date => new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+
+export const utcWeekStart = (value: Date): Date => {
+  const day = utcDayStart(value);
+  const daysFromMonday = (day.getUTCDay() + 6) % 7;
+  day.setUTCDate(day.getUTCDate() - daysFromMonday);
+  return day;
+};
+
+export const calculatePeriodPnl = (
+  nav: Decimal.Value,
+  previous: PeriodPnlState,
+  boundary: Date,
+): PeriodPnlResult => {
+  const current = new Decimal(nav);
+  const reset = previous.baselineAt === null || previous.baselineAt.getTime() < boundary.getTime();
+  const opening = reset ? current : new Decimal(previous.openingNav);
+  const pnl = reset ? new Decimal(0) : current.minus(opening);
+  return {
+    openingNav: opening.toFixed(), baselineAt: boundary, pnl: pnl.toFixed(),
+    pnlRatio: opening.isZero() ? '0' : pnl.div(opening).toFixed(),
+  };
 };
 
 export class LiveExchangeAdapter implements ExchangeAdapter {

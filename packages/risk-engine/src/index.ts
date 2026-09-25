@@ -61,10 +61,14 @@ export const deriveCircuitState = (
   drawdown: Decimal.Value,
   config: Pick<SpotRiskConfig, 'maxDailyLoss' | 'pauseDailyLoss' | 'maxDrawdown'>,
   dataHealthy = true,
+  weeklyPnlRatio: Decimal.Value = 0,
+  maxWeeklyLoss: Decimal.Value = 1,
 ): CircuitState => {
   if (!dataHealthy) return 'PAUSED';
-  const dailyLoss = new Decimal(dailyPnlRatio).abs();
+  const dailyLoss = Decimal.min(0, dailyPnlRatio).abs();
+  const weeklyLoss = Decimal.min(0, weeklyPnlRatio).abs();
   if (new Decimal(drawdown).lte(new Decimal(config.maxDrawdown).neg())) return 'RISK_OFF';
+  if (weeklyLoss.gte(maxWeeklyLoss)) return 'PAUSED';
   if (dailyLoss.gte(config.pauseDailyLoss)) return 'PAUSED';
   if (dailyLoss.gte(config.maxDailyLoss)) return 'REDUCED_RISK';
   return 'RUNNING';
@@ -81,8 +85,12 @@ export const evaluateSpotRisk = (
   const isBuy = proposal.side === 'BUY';
   const ageSeconds = new Decimal(context.now - proposal.marketDataTimestamp).div(1_000);
   const dataHealthy = ageSeconds.lte(config.stalePriceSeconds);
-  const derivedCircuit = deriveCircuitState(context.dailyPnlRatio, context.drawdown, config, dataHealthy);
-  const circuit = context.circuitState === 'RUNNING' ? derivedCircuit : context.circuitState;
+  const derivedCircuit = deriveCircuitState(context.dailyPnlRatio, context.drawdown, config, dataHealthy, context.weeklyPnlRatio, config.maxWeeklyLoss);
+  const circuit = context.circuitState === 'RUNNING'
+    ? derivedCircuit
+    : context.circuitState === 'REDUCED_RISK' && derivedCircuit !== 'RUNNING'
+      ? derivedCircuit
+      : context.circuitState;
   if (!config.allowedAssets.includes(proposal.symbol)) reasons.push('ASSET_NOT_WHITELISTED');
   if (!dataHealthy) reasons.push('STALE_MARKET_DATA');
   if (new Decimal(context.marketLiquidity).lt(config.minLiquidity)) reasons.push('INSUFFICIENT_LIQUIDITY');
@@ -91,7 +99,7 @@ export const evaluateSpotRisk = (
   if (new Decimal(context.weeklyPnlRatio).lte(new Decimal(config.maxWeeklyLoss).neg())) reasons.push('WEEKLY_LOSS_LIMIT');
   if (isBuy && ['PAUSED', 'RISK_OFF'].includes(circuit)) reasons.push(`CIRCUIT_${circuit}`);
   if (!isBuy) {
-    const hardReasons = reasons.filter((reason) => reason === 'ASSET_NOT_WHITELISTED');
+    const hardReasons = reasons.filter((reason) => ['ASSET_NOT_WHITELISTED', 'STALE_MARKET_DATA'].includes(reason));
     return { decision: hardReasons.length === 0 ? 'APPROVED' : 'REJECTED', approvedNotional: hardReasons.length === 0 ? target.toFixed() : '0', reasonCodes: hardReasons, riskMetrics: metrics(context), circuitState: circuit };
   }
   if (equity.lte(0) || target.lte(0)) reasons.push('INVALID_BUY_PROPOSAL');

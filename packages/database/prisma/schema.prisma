@@ -712,6 +712,13 @@ model StrategyAccount {
   realizedPnl      Decimal               @default(0) @db.Decimal(36, 18)
   unrealizedPnl    Decimal               @default(0) @db.Decimal(36, 18)
   dailyPnl         Decimal               @default(0) @db.Decimal(36, 18)
+  dailyOpeningNav  Decimal               @default(0) @db.Decimal(36, 18)
+  dailyPnlRatio    Decimal               @default(0) @db.Decimal(36, 18)
+  dailyBaselineAt  DateTime?
+  weeklyPnl        Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyOpeningNav Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyPnlRatio   Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyBaselineAt DateTime?
   drawdown         Decimal               @default(0) @db.Decimal(36, 18)
   updatedAt        DateTime              @updatedAt
   strategy         Strategy              @relation(fields: [strategyId], references: [id], onDelete: Restrict)
@@ -843,6 +850,10 @@ model Position {
   marketValue       Decimal         @default(0) @db.Decimal(36, 18)
   realizedPnl       Decimal         @default(0) @db.Decimal(36, 18)
   unrealizedPnl     Decimal         @default(0) @db.Decimal(36, 18)
+  stopLoss          Decimal?        @db.Decimal(36, 18)
+  takeProfit        Decimal?        @db.Decimal(36, 18)
+  trailingStop      Decimal?        @db.Decimal(36, 18)
+  markedAt          DateTime?
   openedAt          DateTime        @default(now())
   closedAt          DateTime?
   updatedAt         DateTime        @updatedAt
