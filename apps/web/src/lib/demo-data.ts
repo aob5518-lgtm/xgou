@@ -2,6 +2,7 @@ export interface ChartPoint { readonly label: string; readonly value: number }
 export interface FundSummary { readonly name: string; readonly allocation: number; readonly nav: number; readonly returnPercent: number; readonly tone: 'red' | 'cyan' | 'blue' }
 export interface ActivityItem { readonly time: string; readonly agent: string; readonly message: string; readonly status?: string }
 export interface Position { readonly symbol: string; readonly entry: number; readonly current: number; readonly pnlPercent: number; readonly allocation: number }
+export interface FuturesPosition { readonly symbol: string; readonly side: 'LONG' | 'SHORT'; readonly quantity: number; readonly entry: number; readonly mark: number; readonly leverage: number; readonly notional: number; readonly margin: number; readonly unrealizedPnl: number; readonly stop: number; readonly liquidationPrice: number; readonly liquidationDistance: number }
 
 export const demoData = {
   dashboard: {
@@ -37,7 +38,14 @@ export const demoData = {
     realizedPnl: 432.74, unrealizedPnl: 136.2, dailyPnl: 24.18, drawdown: 0.032,
     totalNav: 12430.21,
     spot: { nav: 7458.13, weeklyPnl: 2.41, monthlyPnl: 7.82, cashReserve: 20, exposure: 62, risk: 'MEDIUM' },
-    futures: { nav: 4972.08, realizedPnl: 432.74, exposure: 38, leverage: 1.8, marginUsage: 24, drawdown: 3.2, risk: 'CONTROLLED' },
+    futures: {
+      status: 'PAPER', circuitState: 'RUNNING', nav: 2008.72, allocatedCapital: 2000, activeCapital: 1300, reserve: 700,
+      realizedPnl: 6.42, unrealizedPnl: 3.18, fundingPnl: -0.24, fees: 0.64, grossExposure: 520, netExposure: 520,
+      leverage: 2, marginUsed: 260, marginUsage: 12.94, drawdown: -0.004, highWaterMark: 2016.8, dailyPnl: 3.2, weeklyPnl: 8.72,
+      consecutiveLosses: 0, risk: 'CONTROLLED', fundingRate: 0.0001, nextFunding: '06H 18M',
+      positions: [{ symbol: 'BTC/USDC-PERP', side: 'LONG', quantity: 0.00462, entry: 108420, mark: 112680, leverage: 2, notional: 520, margin: 260, unrealizedPnl: 19.68, stop: 105200, liquidationPrice: 55836.3, liquidationDistance: 0.5045 }] satisfies readonly FuturesPosition[],
+      recentFunding: [{ id: 'funding-1', symbol: 'BTC/USDC-PERP', fundingRate: 0.0001, payment: -0.052, timestamp: '2026-09-25T00:00:00.000Z' }],
+    },
     positions: [
       { symbol: 'BTC', entry: 108420, current: 112680, pnlPercent: 3.93, allocation: 18 },
       { symbol: 'ETH', entry: 4320, current: 4458, pnlPercent: 3.19, allocation: 14 },

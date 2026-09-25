@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyPaperFill, calculatePeriodPnl, LiveExchangeAdapter, markPaperNav,
   PaperSpotExchangeAdapter, rebalancePaperCapital, utcDayStart, utcWeekStart,
+  applyPerpFill, calculateFundingPayment, calculateLiquidationPrice, LivePerpExchangeAdapter,
+  markPerpPosition, PaperPerpExchangeAdapter,
 } from './index.js';
 import type { RiskEvaluation } from '@xgou/risk-engine';
 import { evaluateSpotRisk } from '@xgou/risk-engine';
@@ -144,5 +146,60 @@ describe('paper spot execution and accounting', () => {
     const fill = await adapter.execute({ orderId: 'pipeline', symbol: signal.symbol, side: 'BUY', notional: '300' }, decision, { price: signal.price, liquidity: '10000000', timestamp: signal.marketDataTimestamp });
     const accounting = applyPaperFill({ cashBalance: '2400', realizedPnl: '0', highWaterMark: '3000' }, { symbol: signal.symbol, quantity: '0', averageEntryPrice: '0', realizedPnl: '0' }, fill);
     expect(new Decimal(markPaperNav(accounting.account, [{ ...accounting.position, currentPrice: fill.price }]).equity).gt(0)).toBe(true);
+  });
+});
+
+describe('paper perpetual execution, margin, funding and liquidation', () => {
+  const perp = new PaperPerpExchangeAdapter({ takerFeeBps: '6', baseSlippageBps: '5', liquidityImpactBps: '10', maxSlippageBps: '50' });
+  const open = (side: 'LONG' | 'SHORT', price = '100', notional = '600') => {
+    const action = side === 'LONG' ? 'OPEN_LONG' as const : 'OPEN_SHORT' as const;
+    const fill = perp.execute(action, notional, price, '10000000');
+    return applyPerpFill(null, side, '2', fill).position;
+  };
+  const required = <T>(value: T | null): T => { if (value === null) throw new Error('expected an open paper position'); return value; };
+
+  it('opens, adds, partially reduces and fully closes a weighted-average LONG', () => {
+    const first = open('LONG');
+    expect(first).not.toBeNull();
+    const addFill = perp.execute('OPEN_LONG', '600', '120', '10000000');
+    const added = applyPerpFill(first, 'LONG', '2', addFill).position;
+    expect(added).not.toBeNull();
+    expect(new Decimal(added?.averageEntryPrice ?? 0).gt(100)).toBe(true);
+    const partialFill = perp.execute('REDUCE_LONG', '300', '130', '10000000', new Decimal(added?.quantity ?? 0).div(2));
+    const partial = applyPerpFill(added, 'LONG', '2', partialFill);
+    expect(new Decimal(partial.realizedPnlDelta).gt(0)).toBe(true);
+    const remainingNotional = new Decimal(partial.position?.quantity ?? 0).mul(130);
+    const closed = applyPerpFill(partial.position, 'LONG', '2', perp.execute('CLOSE_LONG', remainingNotional, '130', '10000000', partial.position?.quantity));
+    expect(closed.position).toBeNull();
+  });
+
+  it('produces profit for a SHORT when mark falls and loss when mark rises', () => {
+    const short = open('SHORT', '100', '1000');
+    expect(new Decimal(markPerpPosition(required(short), '90', '0.01', '0.005').unrealizedPnl).gt(0)).toBe(true);
+    expect(new Decimal(markPerpPosition(required(short), '110', '0.01', '0.005').unrealizedPnl).lt(0)).toBe(true);
+  });
+
+  it('charges/credits one funding payment with the correct side sign', () => {
+    expect(calculateFundingPayment('LONG', '1000', '0.0001')).toBe('-0.1');
+    expect(calculateFundingPayment('SHORT', '1000', '0.0001')).toBe('0.1');
+  });
+
+  it('uses a documented stable isolated liquidation model', () => {
+    expect(calculateLiquidationPrice('LONG', '100', '2', '0.01', '0.005')).toBe('51.5');
+    expect(calculateLiquidationPrice('SHORT', '100', '2', '0.01', '0.005')).toBe('148.5');
+    const long = open('LONG', '100', '600');
+    expect(markPerpPosition(required(long), '50', '0.01', '0.005').liquidated).toBe(true);
+    const short = open('SHORT', '100', '600');
+    expect(markPerpPosition(required(short), '150', '0.01', '0.005').liquidated).toBe(true);
+  });
+
+  it('preserves 2000 = 700 reserve + 1300 active capital', () => {
+    expect(rebalancePaperCapital({ allocatedCapital: '0', activeCapital: '0', cashBalance: '0', reserveBalance: '0' }, '2000', '0.35')).toEqual({ allocatedCapital: '2000', activeCapital: '1300', cashBalance: '1300', reserveBalance: '700' });
+  });
+
+  it('forbids flips and any live perpetual adapter', () => {
+    const long = open('LONG');
+    expect(() => applyPerpFill(long, 'SHORT', '2', perp.execute('OPEN_SHORT', '100', '100', '10000000'))).toThrow('flip is forbidden');
+    expect(() => new LivePerpExchangeAdapter()).toThrow('paper only');
   });
 });

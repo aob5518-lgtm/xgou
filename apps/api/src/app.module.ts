@@ -12,6 +12,7 @@ import { FundsModule } from './funds/funds.module.js';
 import { ChainModule } from './chain/chain.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { SpotAgentModule } from './spot-agent/spot-agent.module.js';
+import { FuturesAgentModule } from './futures-agent/futures-agent.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { SpotAgentModule } from './spot-agent/spot-agent.module.js';
     FundsModule,
     DashboardModule,
     SpotAgentModule,
+    FuturesAgentModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

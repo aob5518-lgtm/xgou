@@ -50,10 +50,32 @@ const seed = async (): Promise<void> => {
   });
   await db.strategyAccount.upsert({ where: { strategyId: strategy.id }, create: { strategyId: strategy.id }, update: {} });
   await db.circuitBreakerState.upsert({ where: { strategyId: strategy.id }, create: { strategyId: strategy.id }, update: {} });
+  const futuresStrategy = await db.strategy.upsert({
+    where: { code: 'FUTURES_TREND_V1' },
+    create: {
+      code: 'FUTURES_TREND_V1', name: 'Futures Trend V1', type: 'FUTURES_TREND', fundDomain: 'FUTURES', status: 'DRAFT',
+      riskProfile: { paperOnly: true, oneWayMode: true, mandatoryStop: true, allowedAssets: ['BTC/USDC-PERP', 'ETH/USDC-PERP', 'SOL/USDC-PERP'] },
+    },
+    update: {},
+  });
+  await db.strategyVersion.upsert({
+    where: { strategyId_version: { strategyId: futuresStrategy.id, version: 1 } },
+    create: { strategyId: futuresStrategy.id, version: 1, active: true, parameters: { emaFast: 20, emaMedium: 50, emaSlow: 100, atr: 14, timeframe: '1h', paperOnly: true } },
+    update: {},
+  });
+  await db.strategyAccount.upsert({ where: { strategyId: futuresStrategy.id }, create: { strategyId: futuresStrategy.id }, update: {} });
+  await db.circuitBreakerState.upsert({ where: { strategyId: futuresStrategy.id }, create: { strategyId: futuresStrategy.id }, update: {} });
   for (const asset of [
     { symbol: 'BTC/USDC', priceDecimals: 2, quantityDecimals: 8 },
     { symbol: 'ETH/USDC', priceDecimals: 2, quantityDecimals: 8 },
     { symbol: 'SOL/USDC', priceDecimals: 4, quantityDecimals: 8 },
+  ]) {
+    await db.assetConfig.upsert({ where: { symbol: asset.symbol }, create: { ...asset, maxWeight: '0.20', minOrderNotional: '10' }, update: {} });
+  }
+  for (const asset of [
+    { symbol: 'BTC/USDC-PERP', priceDecimals: 2, quantityDecimals: 8 },
+    { symbol: 'ETH/USDC-PERP', priceDecimals: 2, quantityDecimals: 8 },
+    { symbol: 'SOL/USDC-PERP', priceDecimals: 4, quantityDecimals: 8 },
   ]) {
     await db.assetConfig.upsert({ where: { symbol: asset.symbol }, create: { ...asset, maxWeight: '0.20', minOrderNotional: '10' }, update: {} });
   }

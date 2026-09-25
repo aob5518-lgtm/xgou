@@ -1,6 +1,7 @@
 import { Decimal } from 'decimal.js';
 
 export type SpotSymbol = 'BTC/USDC' | 'ETH/USDC' | 'SOL/USDC';
+export type FuturesSymbol = 'BTC/USDC-PERP' | 'ETH/USDC-PERP' | 'SOL/USDC-PERP';
 export type Timeframe = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
 
 export interface MarketMetadata {
@@ -48,6 +49,22 @@ export interface MarketDataAdapter {
   healthCheck(): Promise<boolean>;
 }
 
+export interface PerpMetric extends Omit<MarketMetadata, 'symbol'> {
+  readonly symbol: FuturesSymbol;
+  readonly value: string;
+  readonly nextFundingAt?: number;
+}
+
+export interface PerpMarketDataAdapter {
+  getOHLCV(symbol: FuturesSymbol, timeframe: Timeframe, limit: number): Promise<readonly Candle[]>;
+  getFundingRate(symbol: FuturesSymbol): Promise<PerpMetric>;
+  getMarkPrice(symbol: FuturesSymbol): Promise<PerpMetric>;
+  getIndexPrice(symbol: FuturesSymbol): Promise<PerpMetric>;
+  getOpenInterest(symbol: FuturesSymbol): Promise<PerpMetric>;
+  get24hStats(symbol: FuturesSymbol): Promise<Stats24h>;
+  healthCheck(): Promise<boolean>;
+}
+
 export interface MarketDataCache {
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown, ttlSeconds: number): Promise<void>;
@@ -72,6 +89,12 @@ const SOURCE_PAIRS: Readonly<Record<SpotSymbol, string>> = {
   'BTC/USDC': 'BTCUSDT',
   'ETH/USDC': 'ETHUSDT',
   'SOL/USDC': 'SOLUSDT',
+};
+
+export const PERP_SOURCE_PAIRS: Readonly<Record<FuturesSymbol, string>> = {
+  'BTC/USDC-PERP': 'BTCUSDT',
+  'ETH/USDC-PERP': 'ETHUSDT',
+  'SOL/USDC-PERP': 'SOLUSDT',
 };
 
 type HttpFetcher = (url: string) => Promise<{ readonly ok: boolean; json(): Promise<unknown> }>;
@@ -261,3 +284,96 @@ export const createHistoricalFixture = (symbol: SpotSymbol, startPrice: string, 
     } satisfies Candle;
   });
 };
+
+export class PublicPerpMarketDataAdapter implements PerpMarketDataAdapter {
+  constructor(
+    private readonly baseUrl = 'https://fapi.binance.com',
+    private readonly fetcher: HttpFetcher = (url) => {
+      const runtimeFetch = (globalThis as unknown as { fetch?: HttpFetcher }).fetch;
+      if (!runtimeFetch) throw new Error('global fetch is unavailable');
+      return runtimeFetch(url);
+    },
+  ) {}
+
+  async getFundingRate(symbol: FuturesSymbol): Promise<PerpMetric> {
+    const raw = await this.read(`/fapi/v1/premiumIndex?symbol=${PERP_SOURCE_PAIRS[symbol]}`);
+    return this.metric(symbol, this.field(raw, 'lastFundingRate'), this.timestamp(raw, 'time'), {
+      nextFundingAt: this.timestamp(raw, 'nextFundingTime'),
+    });
+  }
+
+  async getMarkPrice(symbol: FuturesSymbol): Promise<PerpMetric> {
+    const raw = await this.read(`/fapi/v1/premiumIndex?symbol=${PERP_SOURCE_PAIRS[symbol]}`);
+    return this.metric(symbol, this.field(raw, 'markPrice'), this.timestamp(raw, 'time'));
+  }
+
+  async getIndexPrice(symbol: FuturesSymbol): Promise<PerpMetric> {
+    const raw = await this.read(`/fapi/v1/premiumIndex?symbol=${PERP_SOURCE_PAIRS[symbol]}`);
+    return this.metric(symbol, this.field(raw, 'indexPrice'), this.timestamp(raw, 'time'));
+  }
+
+  async getOpenInterest(symbol: FuturesSymbol): Promise<PerpMetric> {
+    const raw = await this.read(`/fapi/v1/openInterest?symbol=${PERP_SOURCE_PAIRS[symbol]}`);
+    return this.metric(symbol, this.field(raw, 'openInterest'), this.timestamp(raw, 'time'));
+  }
+
+  async getOHLCV(symbol: FuturesSymbol, timeframe: Timeframe, limit: number): Promise<readonly Candle[]> {
+    if (!Number.isSafeInteger(limit) || limit < 2 || limit > 1_000) throw new Error('OHLCV limit must be between 2 and 1000');
+    const raw = await this.read(`/fapi/v1/klines?symbol=${PERP_SOURCE_PAIRS[symbol]}&interval=${timeframe}&limit=${String(limit)}`);
+    if (!Array.isArray(raw)) throw new Error('invalid perp OHLCV response');
+    const receivedAt = new Date().toISOString();
+    return raw.map((row) => {
+      if (!Array.isArray(row) || row.length < 7) throw new Error('invalid perp OHLCV row');
+      return {
+        symbol: symbol.replace('-PERP', '') as SpotSymbol,
+        priceSourcePair: PERP_SOURCE_PAIRS[symbol], source: 'BINANCE_FUTURES_PUBLIC', timeframe,
+        exchangeTimestamp: this.numeric(row[6]), receivedAt, openTime: this.numeric(row[0]), closeTime: this.numeric(row[6]),
+        open: this.decimal(row[1]), high: this.decimal(row[2]), low: this.decimal(row[3]), close: this.decimal(row[4]), volume: this.decimal(row[5]),
+      };
+    });
+  }
+
+  async get24hStats(symbol: FuturesSymbol): Promise<Stats24h> {
+    const raw = await this.read(`/fapi/v1/ticker/24hr?symbol=${PERP_SOURCE_PAIRS[symbol]}`);
+    return {
+      symbol: symbol.replace('-PERP', '') as SpotSymbol, priceSourcePair: PERP_SOURCE_PAIRS[symbol], source: 'BINANCE_FUTURES_PUBLIC',
+      exchangeTimestamp: this.timestamp(raw, 'closeTime'), receivedAt: new Date().toISOString(),
+      changePercent: this.field(raw, 'priceChangePercent'), quoteVolume: this.field(raw, 'quoteVolume'),
+      high: this.field(raw, 'highPrice'), low: this.field(raw, 'lowPrice'),
+    };
+  }
+
+  async healthCheck(): Promise<boolean> {
+    try { await this.read('/fapi/v1/ping'); return true; } catch { return false; }
+  }
+
+  private metric(symbol: FuturesSymbol, value: string, exchangeTimestamp: number, extra: { readonly nextFundingAt?: number } = {}): PerpMetric {
+    return { symbol, priceSourcePair: PERP_SOURCE_PAIRS[symbol], source: 'BINANCE_FUTURES_PUBLIC', exchangeTimestamp, receivedAt: new Date().toISOString(), value, ...extra };
+  }
+  private async read(path: string): Promise<unknown> { const response = await this.fetcher(`${this.baseUrl}${path}`); if (!response.ok) throw new Error(`public perp market data request failed: ${path}`); return response.json(); }
+  private field(value: unknown, field: string): string { if (typeof value !== 'object' || value === null || !(field in value)) throw new Error(`missing perp market data field: ${field}`); return this.decimal((value as Record<string, unknown>)[field]); }
+  private decimal(value: unknown): string { if (typeof value !== 'string' && typeof value !== 'number') throw new Error('invalid perp decimal'); return new Decimal(value).toFixed(); }
+  private timestamp(value: unknown, field: string): number { if (typeof value !== 'object' || value === null) throw new Error('invalid perp timestamp'); return this.numeric((value as Record<string, unknown>)[field]); }
+  private numeric(value: unknown): number { const parsed = typeof value === 'number' ? value : Number(value); if (!Number.isSafeInteger(parsed)) throw new Error('invalid perp timestamp'); return parsed; }
+}
+
+export class MockPerpMarketDataAdapter implements PerpMarketDataAdapter {
+  private readonly fixtures: Readonly<Record<FuturesSymbol, readonly Candle[]>>;
+  constructor(private readonly now = Date.now()) {
+    this.fixtures = {
+      'BTC/USDC-PERP': createHistoricalFixture('BTC/USDC', '60000', 150),
+      'ETH/USDC-PERP': createHistoricalFixture('ETH/USDC', '3000', 150),
+      'SOL/USDC-PERP': createHistoricalFixture('SOL/USDC', '150', 150),
+    };
+  }
+  async getOHLCV(symbol: FuturesSymbol, timeframe: Timeframe, limit: number): Promise<readonly Candle[]> { return Promise.resolve(this.fixtures[symbol].slice(-limit).map((row) => ({ ...row, timeframe, priceSourcePair: PERP_SOURCE_PAIRS[symbol], source: 'FUTURES_FIXTURE' }))); }
+  async getFundingRate(symbol: FuturesSymbol): Promise<PerpMetric> { return Promise.resolve(this.metric(symbol, '0.0001', { nextFundingAt: this.now + 8 * 60 * 60 * 1_000 })); }
+  async getMarkPrice(symbol: FuturesSymbol): Promise<PerpMetric> { return Promise.resolve(this.metric(symbol, this.latest(symbol).close)); }
+  async getIndexPrice(symbol: FuturesSymbol): Promise<PerpMetric> { return Promise.resolve(this.metric(symbol, this.latest(symbol).close)); }
+  async getOpenInterest(symbol: FuturesSymbol): Promise<PerpMetric> { return Promise.resolve(this.metric(symbol, '100000000'));
+  }
+  async get24hStats(symbol: FuturesSymbol): Promise<Stats24h> { const rows = this.fixtures[symbol]; const last = this.latest(symbol); const first = rows.at(-24) ?? last; return Promise.resolve({ symbol: last.symbol, priceSourcePair: PERP_SOURCE_PAIRS[symbol], source: 'FUTURES_FIXTURE', exchangeTimestamp: this.now, receivedAt: new Date(this.now).toISOString(), changePercent: new Decimal(last.close).div(first.close).minus(1).mul(100).toFixed(), quoteVolume: '100000000', high: Decimal.max(...rows.slice(-24).map((row) => new Decimal(row.high))).toFixed(), low: Decimal.min(...rows.slice(-24).map((row) => new Decimal(row.low))).toFixed() }); }
+  async healthCheck(): Promise<boolean> { return Promise.resolve(true); }
+  private latest(symbol: FuturesSymbol): Candle { const row = this.fixtures[symbol].at(-1); if (!row) throw new Error(`no perp fixture for ${symbol}`); return row; }
+  private metric(symbol: FuturesSymbol, value: string, extra: { readonly nextFundingAt?: number } = {}): PerpMetric { return { symbol, priceSourcePair: PERP_SOURCE_PAIRS[symbol], source: 'FUTURES_FIXTURE', exchangeTimestamp: this.now, receivedAt: new Date(this.now).toISOString(), value, ...extra }; }
+}

@@ -17,6 +17,10 @@ describe('systemConfigSchema', () => {
       bullAllocation: '0.50',
       spotStrategyAllocation: '0.30',
       futuresStrategyAllocation: '0.20',
+      futuresPaperTradingEnabled: false,
+      futuresMaxGrossExposure: '0.65',
+      futuresMaxNetExposure: '0.50',
+      futuresMaxMarginUsage: '0.50',
     });
   });
 

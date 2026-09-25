@@ -14,6 +14,10 @@ const spotRuntimeMigrationPath = new URL(
   '../prisma/migrations/20260925120000_finalize_spot_paper_runtime/migration.sql',
   import.meta.url,
 );
+const futuresMigrationPath = new URL(
+  '../prisma/migrations/20260926120000_phase3b_futures_paper_trading/migration.sql',
+  import.meta.url,
+);
 
 describe('Phase 1 database artifacts', () => {
   it('stores asset and XP amounts as Decimal and defines the referral closure identity', async () => {
@@ -28,6 +32,27 @@ describe('Phase 1 database artifacts', () => {
     expect(migration).toContain('ReferralClosure_self_depth_check');
     expect(migration).toContain('Participation_amount_positive');
     expect(migration).toContain('AuditLog_prevent_update_delete');
+  });
+});
+
+describe('Phase 3B futures paper persistence', () => {
+  it('persists margin, funding, liquidation and restart recovery state', async () => {
+    const [schema, migration] = await Promise.all([readFile(schemaPath, 'utf8'), readFile(futuresMigrationPath, 'utf8')]);
+    for (const model of ['FuturesPosition', 'FundingPayment', 'FuturesLiquidation']) {
+      expect(schema).toContain(`model ${model}`);
+      expect(migration).toContain(`CREATE TABLE "${model}"`);
+    }
+    for (const field of ['equity', 'marginUsed', 'availableMargin', 'grossExposure', 'netExposure', 'fundingPnl', 'consecutiveLosses', 'liquidationDistance']) {
+      expect(schema).toContain(field);
+      expect(migration).toContain(`"${field}"`);
+    }
+  });
+
+  it('enforces one-way positions and funding/cycle idempotency', async () => {
+    const migration = await readFile(futuresMigrationPath, 'utf8');
+    expect(migration).toContain('FuturesPosition_strategyAccountId_symbol_key');
+    expect(migration).toContain('FundingPayment_idempotencyKey_key');
+    expect(migration).toContain('FuturesLiquidation_cycleId_key');
   });
 });
 

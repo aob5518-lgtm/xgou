@@ -209,3 +209,148 @@ export class LiveExchangeAdapter implements ExchangeAdapter {
   }
   execute(): Promise<PaperFill> { throw new Error('live execution is unavailable'); }
 }
+
+export type PerpSide = 'LONG' | 'SHORT';
+export type PerpAction = 'OPEN_LONG' | 'OPEN_SHORT' | 'REDUCE_LONG' | 'REDUCE_SHORT' | 'CLOSE_LONG' | 'CLOSE_SHORT';
+
+export interface PaperPerpPositionState {
+  readonly symbol: string;
+  readonly side: PerpSide;
+  readonly quantity: string;
+  readonly averageEntryPrice: string;
+  readonly leverage: string;
+  readonly realizedPnl: string;
+  readonly fundingPnl: string;
+  readonly fees: string;
+}
+
+export interface PaperPerpFill {
+  readonly action: PerpAction;
+  readonly quantity: string;
+  readonly price: string;
+  readonly notional: string;
+  readonly fee: string;
+  readonly slippageBps: string;
+}
+
+export interface PaperPerpExecutionConfig {
+  readonly takerFeeBps: string;
+  readonly baseSlippageBps: string;
+  readonly liquidityImpactBps: string;
+  readonly maxSlippageBps: string;
+}
+
+export class PaperPerpExchangeAdapter {
+  constructor(private readonly config: PaperPerpExecutionConfig) {}
+
+  execute(action: PerpAction, notional: Decimal.Value, price: Decimal.Value, liquidity: Decimal.Value, reduceQuantity?: Decimal.Value): PaperPerpFill {
+    const amount = new Decimal(notional);
+    const mark = new Decimal(price);
+    const depth = new Decimal(liquidity);
+    if (amount.lte(0) || mark.lte(0) || depth.lte(0)) throw new Error('invalid paper perp order');
+    const impact = amount.div(depth).mul(this.config.liquidityImpactBps);
+    const slippageBps = Decimal.min(this.config.maxSlippageBps, new Decimal(this.config.baseSlippageBps).plus(impact));
+    const buy = action === 'OPEN_LONG' || action === 'REDUCE_SHORT' || action === 'CLOSE_SHORT';
+    const ratio = slippageBps.div(10_000);
+    const fillPrice = buy ? mark.mul(ratio.plus(1)) : mark.mul(new Decimal(1).minus(ratio));
+    const calculatedQuantity = amount.div(fillPrice);
+    const quantity = reduceQuantity === undefined ? calculatedQuantity : Decimal.min(calculatedQuantity, reduceQuantity);
+    const executedNotional = quantity.mul(fillPrice);
+    return { action, quantity: quantity.toFixed(), price: fillPrice.toFixed(), notional: executedNotional.toFixed(), fee: executedNotional.mul(this.config.takerFeeBps).div(10_000).toFixed(), slippageBps: slippageBps.toFixed() };
+  }
+}
+
+export const calculateLiquidationPrice = (
+  side: PerpSide,
+  entryPrice: Decimal.Value,
+  leverage: Decimal.Value,
+  maintenanceMarginRatio: Decimal.Value,
+  feeBuffer: Decimal.Value,
+): string => {
+  const entry = new Decimal(entryPrice);
+  const cushion = new Decimal(1).div(leverage).minus(maintenanceMarginRatio).minus(feeBuffer);
+  if (cushion.lte(0)) throw new Error('leverage leaves no liquidation cushion');
+  return (side === 'LONG' ? entry.mul(new Decimal(1).minus(cushion)) : entry.mul(cushion.plus(1))).toFixed();
+};
+
+export const calculateLiquidationDistance = (markPrice: Decimal.Value, liquidationPrice: Decimal.Value): string => {
+  const mark = new Decimal(markPrice);
+  if (mark.lte(0)) throw new Error('mark price must be positive');
+  return mark.minus(liquidationPrice).abs().div(mark).toFixed();
+};
+
+export const calculatePerpUnrealizedPnl = (side: PerpSide, quantity: Decimal.Value, entryPrice: Decimal.Value, markPrice: Decimal.Value): string => {
+  const move = side === 'LONG' ? new Decimal(markPrice).minus(entryPrice) : new Decimal(entryPrice).minus(markPrice);
+  return move.mul(quantity).toFixed();
+};
+
+export const applyPerpFill = (
+  current: PaperPerpPositionState | null,
+  side: PerpSide,
+  leverage: Decimal.Value,
+  fill: PaperPerpFill,
+): { readonly position: PaperPerpPositionState | null; readonly realizedPnlDelta: string; readonly marginDelta: string; readonly loss: boolean } => {
+  const opening = fill.action === 'OPEN_LONG' || fill.action === 'OPEN_SHORT';
+  const quantity = new Decimal(fill.quantity);
+  const fillPrice = new Decimal(fill.price);
+  const fee = new Decimal(fill.fee);
+  if (opening) {
+    if (current && current.side !== side) throw new Error('position flip is forbidden; close before opening opposite side');
+    const oldQuantity = new Decimal(current?.quantity ?? 0);
+    const total = oldQuantity.plus(quantity);
+    const average = oldQuantity.mul(current?.averageEntryPrice ?? 0).plus(quantity.mul(fillPrice)).div(total);
+    const oldMargin = oldQuantity.mul(current?.averageEntryPrice ?? 0).div(current?.leverage ?? leverage);
+    const newMargin = total.mul(average).div(leverage);
+    return {
+      position: { symbol: current?.symbol ?? '', side, quantity: total.toFixed(), averageEntryPrice: average.toFixed(), leverage: new Decimal(leverage).toFixed(), realizedPnl: current?.realizedPnl ?? '0', fundingPnl: current?.fundingPnl ?? '0', fees: new Decimal(current?.fees ?? 0).plus(fee).toFixed() },
+      realizedPnlDelta: fee.neg().toFixed(), marginDelta: newMargin.minus(oldMargin).toFixed(), loss: false,
+    };
+  }
+  if (!current || current.side !== side) throw new Error('reduce requires an existing same-side position');
+  const oldQuantity = new Decimal(current.quantity);
+  if (quantity.gt(oldQuantity)) throw new Error('paper perp reduce exceeds position quantity');
+  const gross = side === 'LONG' ? fillPrice.minus(current.averageEntryPrice).mul(quantity) : new Decimal(current.averageEntryPrice).minus(fillPrice).mul(quantity);
+  const realized = gross.minus(fee);
+  const remaining = oldQuantity.minus(quantity);
+  const releasedMargin = quantity.mul(current.averageEntryPrice).div(current.leverage);
+  return {
+    position: remaining.isZero() ? null : { ...current, quantity: remaining.toFixed(), realizedPnl: new Decimal(current.realizedPnl).plus(realized).toFixed(), fees: new Decimal(current.fees).plus(fee).toFixed() },
+    realizedPnlDelta: realized.toFixed(), marginDelta: releasedMargin.neg().toFixed(), loss: realized.lt(0),
+  };
+};
+
+export const calculateFundingPayment = (side: PerpSide, notional: Decimal.Value, fundingRate: Decimal.Value): string => {
+  const payment = new Decimal(notional).mul(fundingRate);
+  return (side === 'LONG' ? payment.neg() : payment).toFixed();
+};
+
+export interface PerpMarkResult {
+  readonly notional: string;
+  readonly initialMargin: string;
+  readonly maintenanceMargin: string;
+  readonly unrealizedPnl: string;
+  readonly liquidationPrice: string;
+  readonly liquidationDistance: string;
+  readonly liquidated: boolean;
+}
+
+export const markPerpPosition = (
+  position: PaperPerpPositionState,
+  markPrice: Decimal.Value,
+  maintenanceMarginRatio: Decimal.Value,
+  feeBuffer: Decimal.Value,
+): PerpMarkResult => {
+  const mark = new Decimal(markPrice);
+  const notional = new Decimal(position.quantity).mul(mark);
+  const liquidationPrice = calculateLiquidationPrice(position.side, position.averageEntryPrice, position.leverage, maintenanceMarginRatio, feeBuffer);
+  const liquidated = position.side === 'LONG' ? mark.lte(liquidationPrice) : mark.gte(liquidationPrice);
+  return {
+    notional: notional.toFixed(), initialMargin: notional.div(position.leverage).toFixed(), maintenanceMargin: notional.mul(maintenanceMarginRatio).toFixed(),
+    unrealizedPnl: calculatePerpUnrealizedPnl(position.side, position.quantity, position.averageEntryPrice, mark),
+    liquidationPrice, liquidationDistance: calculateLiquidationDistance(mark, liquidationPrice), liquidated,
+  };
+};
+
+export class LivePerpExchangeAdapter {
+  constructor() { throw new Error('Phase 3B paper only: authenticated futures trading is unavailable'); }
+}

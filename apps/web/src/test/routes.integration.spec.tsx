@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import JoinPage from '@/app/(app)/join/page';
 import SettingsPage from '@/app/(app)/settings/page';
+import AgentPage from '@/app/(app)/agent/page';
 import { appRoutes } from '@/components/layout/AppShell';
 
 describe('product routes', () => {
@@ -19,5 +20,13 @@ describe('product routes', () => {
     render(<SettingsPage />);
     expect(screen.getByText('Settings')).toBeInTheDocument();
     expect(screen.getByText('ENABLED · LOCKED')).toBeInTheDocument();
+  });
+
+  it('renders Futures Trend as an explicit paper strategy with no real fund movement', async () => {
+    render(await AgentPage());
+    expect(screen.getByText('FUTURES TREND V1 · PAPER')).toBeInTheDocument();
+    expect(screen.getAllByText('NO REAL FUNDS MOVE').length).toBeGreaterThan(0);
+    expect(screen.getByText('FUTURES POSITIONS · PAPER')).toBeInTheDocument();
+    expect(screen.getByText('BTC/USDC-PERP')).toBeInTheDocument();
   });
 });

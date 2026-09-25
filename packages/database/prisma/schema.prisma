@@ -141,6 +141,7 @@ enum TreasuryAccountKind {
 
 enum StrategyType {
   SPOT_SWING
+  FUTURES_TREND
 }
 
 enum StrategyStatus {
@@ -159,6 +160,8 @@ enum StrategyAccountStatus {
 
 enum SignalType {
   BUY
+  LONG
+  SHORT
   REDUCE
   EXIT
   HOLD
@@ -166,6 +169,12 @@ enum SignalType {
 
 enum ProposalSide {
   BUY
+  OPEN_LONG
+  OPEN_SHORT
+  REDUCE_LONG
+  REDUCE_SHORT
+  CLOSE_LONG
+  CLOSE_SHORT
   REDUCE
   EXIT
 }
@@ -193,6 +202,7 @@ enum PaperOrderStatus {
   PARTIALLY_FILLED
   CANCELLED
   REJECTED
+  LIQUIDATED
 }
 
 enum PaperOrderType {
@@ -208,6 +218,13 @@ enum PaperSide {
 enum PositionStatus {
   OPEN
   CLOSED
+  FORCED_CLOSED
+  LIQUIDATED
+}
+
+enum FuturesPositionSide {
+  LONG
+  SHORT
 }
 
 enum CircuitBreakerStatus {
@@ -699,33 +716,42 @@ model StrategyVersion {
 }
 
 model StrategyAccount {
-  id               String                @id @default(uuid()) @db.Uuid
-  strategyId       String                @unique @db.Uuid
-  status           StrategyAccountStatus @default(ACTIVE)
-  asset            String                @default("USDC") @db.VarChar(12)
-  allocatedCapital Decimal               @default(0) @db.Decimal(36, 18)
-  activeCapital    Decimal               @default(0) @db.Decimal(36, 18)
-  cashBalance      Decimal               @default(0) @db.Decimal(36, 18)
-  reserveBalance   Decimal               @default(0) @db.Decimal(36, 18)
-  nav              Decimal               @default(0) @db.Decimal(36, 18)
-  highWaterMark    Decimal               @default(0) @db.Decimal(36, 18)
-  realizedPnl      Decimal               @default(0) @db.Decimal(36, 18)
-  unrealizedPnl    Decimal               @default(0) @db.Decimal(36, 18)
-  dailyPnl         Decimal               @default(0) @db.Decimal(36, 18)
-  dailyOpeningNav  Decimal               @default(0) @db.Decimal(36, 18)
-  dailyPnlRatio    Decimal               @default(0) @db.Decimal(36, 18)
-  dailyBaselineAt  DateTime?
-  weeklyPnl        Decimal               @default(0) @db.Decimal(36, 18)
-  weeklyOpeningNav Decimal               @default(0) @db.Decimal(36, 18)
-  weeklyPnlRatio   Decimal               @default(0) @db.Decimal(36, 18)
-  weeklyBaselineAt DateTime?
-  drawdown         Decimal               @default(0) @db.Decimal(36, 18)
-  updatedAt        DateTime              @updatedAt
-  strategy         Strategy              @relation(fields: [strategyId], references: [id], onDelete: Restrict)
-  allocations      StrategyAllocation[]
-  positions        Position[]
-  pnl              StrategyPnL[]
-  navSnapshots     NavSnapshot[]
+  id                String                @id @default(uuid()) @db.Uuid
+  strategyId        String                @unique @db.Uuid
+  status            StrategyAccountStatus @default(ACTIVE)
+  asset             String                @default("USDC") @db.VarChar(12)
+  allocatedCapital  Decimal               @default(0) @db.Decimal(36, 18)
+  activeCapital     Decimal               @default(0) @db.Decimal(36, 18)
+  cashBalance       Decimal               @default(0) @db.Decimal(36, 18)
+  reserveBalance    Decimal               @default(0) @db.Decimal(36, 18)
+  nav               Decimal               @default(0) @db.Decimal(36, 18)
+  equity            Decimal               @default(0) @db.Decimal(36, 18)
+  highWaterMark     Decimal               @default(0) @db.Decimal(36, 18)
+  realizedPnl       Decimal               @default(0) @db.Decimal(36, 18)
+  unrealizedPnl     Decimal               @default(0) @db.Decimal(36, 18)
+  dailyPnl          Decimal               @default(0) @db.Decimal(36, 18)
+  dailyOpeningNav   Decimal               @default(0) @db.Decimal(36, 18)
+  dailyPnlRatio     Decimal               @default(0) @db.Decimal(36, 18)
+  dailyBaselineAt   DateTime?
+  weeklyPnl         Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyOpeningNav  Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyPnlRatio    Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyBaselineAt  DateTime?
+  drawdown          Decimal               @default(0) @db.Decimal(36, 18)
+  marginUsed        Decimal               @default(0) @db.Decimal(36, 18)
+  availableMargin   Decimal               @default(0) @db.Decimal(36, 18)
+  grossExposure     Decimal               @default(0) @db.Decimal(36, 18)
+  netExposure       Decimal               @default(0) @db.Decimal(36, 18)
+  fundingPnl        Decimal               @default(0) @db.Decimal(36, 18)
+  fees              Decimal               @default(0) @db.Decimal(36, 18)
+  consecutiveLosses Int                   @default(0)
+  updatedAt         DateTime              @updatedAt
+  strategy          Strategy              @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+  allocations       StrategyAllocation[]
+  positions         Position[]
+  pnl               StrategyPnL[]
+  navSnapshots      NavSnapshot[]
+  futuresPositions  FuturesPosition[]
 }
 
 model StrategyAllocation {
@@ -781,6 +807,12 @@ model TradeProposal {
   requestedNotional Decimal        @db.Decimal(36, 18)
   approvedNotional  Decimal?       @db.Decimal(36, 18)
   referencePrice    Decimal        @db.Decimal(36, 18)
+  requestedLeverage Decimal?       @db.Decimal(18, 8)
+  approvedLeverage  Decimal?       @db.Decimal(18, 8)
+  stopLoss          Decimal?       @db.Decimal(36, 18)
+  takeProfit        Decimal?       @db.Decimal(36, 18)
+  maxSlippage       Decimal?       @db.Decimal(18, 8)
+  reason            String?        @db.VarChar(256)
   status            ProposalStatus @default(CREATED)
   createdAt         DateTime       @default(now())
   strategy          Strategy       @relation(fields: [strategyId], references: [id], onDelete: Restrict)
@@ -816,6 +848,8 @@ model PaperOrder {
   quantity       Decimal          @db.Decimal(36, 18)
   notional       Decimal          @db.Decimal(36, 18)
   referencePrice Decimal          @db.Decimal(36, 18)
+  leverage       Decimal?         @db.Decimal(18, 8)
+  reduceOnly     Boolean          @default(false)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   proposal       TradeProposal    @relation(fields: [proposalId], references: [id], onDelete: Restrict)
@@ -823,6 +857,69 @@ model PaperOrder {
   executions     PaperExecution[]
 
   @@index([status, createdAt])
+}
+
+model FuturesPosition {
+  id                  String               @id @default(uuid()) @db.Uuid
+  strategyAccountId   String               @db.Uuid
+  symbol              String               @db.VarChar(24)
+  priceSourcePair     String               @db.VarChar(24)
+  side                FuturesPositionSide
+  status              PositionStatus       @default(OPEN)
+  quantity            Decimal              @db.Decimal(36, 18)
+  averageEntry        Decimal              @db.Decimal(36, 18)
+  markPrice           Decimal              @db.Decimal(36, 18)
+  leverage            Decimal              @db.Decimal(18, 8)
+  notional            Decimal              @db.Decimal(36, 18)
+  initialMargin       Decimal              @db.Decimal(36, 18)
+  maintenanceMargin   Decimal              @db.Decimal(36, 18)
+  liquidationPrice    Decimal              @db.Decimal(36, 18)
+  liquidationDistance Decimal              @db.Decimal(18, 8)
+  realizedPnl         Decimal              @default(0) @db.Decimal(36, 18)
+  unrealizedPnl       Decimal              @default(0) @db.Decimal(36, 18)
+  fundingPnl          Decimal              @default(0) @db.Decimal(36, 18)
+  fees                Decimal              @default(0) @db.Decimal(36, 18)
+  stopLoss            Decimal              @db.Decimal(36, 18)
+  takeProfit          Decimal?             @db.Decimal(36, 18)
+  trailingStop        Decimal?             @db.Decimal(36, 18)
+  highestMarkPrice    Decimal?             @db.Decimal(36, 18)
+  lowestMarkPrice     Decimal?             @db.Decimal(36, 18)
+  markedAt            DateTime?
+  openedAt            DateTime             @default(now())
+  closedAt            DateTime?
+  updatedAt           DateTime             @updatedAt
+  account             StrategyAccount      @relation(fields: [strategyAccountId], references: [id], onDelete: Restrict)
+  fundingPayments     FundingPayment[]
+  liquidations        FuturesLiquidation[]
+
+  @@unique([strategyAccountId, symbol])
+  @@index([status, markedAt])
+}
+
+model FundingPayment {
+  id             String          @id @default(uuid()) @db.Uuid
+  positionId     String          @db.Uuid
+  idempotencyKey String          @unique @db.VarChar(160)
+  fundingRate    Decimal         @db.Decimal(18, 10)
+  notional       Decimal         @db.Decimal(36, 18)
+  payment        Decimal         @db.Decimal(36, 18)
+  fundedAt       DateTime
+  createdAt      DateTime        @default(now())
+  position       FuturesPosition @relation(fields: [positionId], references: [id], onDelete: Restrict)
+
+  @@index([positionId, fundedAt])
+}
+
+model FuturesLiquidation {
+  id               String          @id @default(uuid()) @db.Uuid
+  positionId       String          @db.Uuid
+  cycleId          String          @unique @db.VarChar(128)
+  liquidationPrice Decimal         @db.Decimal(36, 18)
+  fillPrice        Decimal         @db.Decimal(36, 18)
+  penalty          Decimal         @db.Decimal(36, 18)
+  realizedLoss     Decimal         @db.Decimal(36, 18)
+  createdAt        DateTime        @default(now())
+  position         FuturesPosition @relation(fields: [positionId], references: [id], onDelete: Restrict)
 }
 
 model PaperExecution {

@@ -1,5 +1,5 @@
 import { Decimal } from 'decimal.js';
-import type { Candle, SpotSymbol } from '@xgou/market-data';
+import type { Candle, FuturesSymbol, SpotSymbol } from '@xgou/market-data';
 
 export const sma = (values: readonly Decimal.Value[], period: number): Decimal => {
   const window = values.slice(-period).map((value) => new Decimal(value));
@@ -181,3 +181,115 @@ export class HistoricalFixtureRunner {
     return results;
   }
 }
+
+export interface FuturesTrendConfig {
+  readonly emaFastPeriod: number;
+  readonly emaMediumPeriod: number;
+  readonly emaSlowPeriod: number;
+  readonly atrPeriod: number;
+  readonly rsiPeriod: number;
+  readonly momentumPeriod: number;
+  readonly minTrendStrength: string;
+  readonly maxAtrRatio: string;
+  readonly longRsiMax: string;
+  readonly shortRsiMin: string;
+  readonly maxFundingRateAbs: string;
+  readonly stopAtrMultiple: string;
+  readonly targetAtrMultiple: string;
+  readonly trailingAtrMultiple: string;
+}
+
+export const FUTURES_TREND_V1_CONFIG: FuturesTrendConfig = {
+  emaFastPeriod: 20, emaMediumPeriod: 50, emaSlowPeriod: 100, atrPeriod: 14,
+  rsiPeriod: 14, momentumPeriod: 20, minTrendStrength: '0.001', maxAtrRatio: '0.06',
+  longRsiMax: '75', shortRsiMin: '25', maxFundingRateAbs: '0.001',
+  stopAtrMultiple: '2', targetAtrMultiple: '4', trailingAtrMultiple: '2',
+};
+
+export type FuturesSignalType = 'LONG' | 'SHORT' | 'REDUCE' | 'EXIT' | 'HOLD';
+export type FuturesPositionSide = 'LONG' | 'SHORT';
+
+export interface FuturesPositionInput {
+  readonly side: FuturesPositionSide;
+  readonly stopLoss: string;
+  readonly highestMarkPrice?: string;
+  readonly lowestMarkPrice?: string;
+}
+
+export interface FuturesSignal {
+  readonly symbol: FuturesSymbol;
+  readonly signalType: FuturesSignalType;
+  readonly strength: string;
+  readonly requestedLeverage: string;
+  readonly price: string;
+  readonly stopLoss: string | null;
+  readonly takeProfit: string | null;
+  readonly trailingStop: string | null;
+  readonly reason: string;
+  readonly marketDataTimestamp: number;
+  readonly indicators: Readonly<Record<string, string>>;
+}
+
+export const updateTrailingStop = (
+  side: FuturesPositionSide,
+  current: Decimal.Value | null,
+  mark: Decimal.Value,
+  atrValue: Decimal.Value,
+  multiple: Decimal.Value,
+): string => {
+  const candidate = side === 'LONG'
+    ? new Decimal(mark).minus(new Decimal(atrValue).mul(multiple))
+    : new Decimal(mark).plus(new Decimal(atrValue).mul(multiple));
+  if (current === null) return candidate.toFixed();
+  return side === 'LONG' ? Decimal.max(current, candidate).toFixed() : Decimal.min(current, candidate).toFixed();
+};
+
+export const evaluateFuturesTrendV1 = (
+  symbol: FuturesSymbol,
+  candles: readonly Candle[],
+  fundingRate: Decimal.Value,
+  config: FuturesTrendConfig = FUTURES_TREND_V1_CONFIG,
+  position?: FuturesPositionInput,
+): FuturesSignal => {
+  if (candles.length < config.emaSlowPeriod + 1) throw new Error('insufficient candles for FUTURES_TREND_V1');
+  const last = candles.at(-1);
+  if (!last) throw new Error('missing latest futures candle');
+  const closes = candles.map((candle) => candle.close);
+  const price = new Decimal(last.close);
+  const fast = ema(closes, config.emaFastPeriod);
+  const medium = ema(closes, config.emaMediumPeriod);
+  const slow = ema(closes, config.emaSlowPeriod);
+  const atrValue = atr(candles, config.atrPeriod);
+  const rsiValue = rsi(closes, config.rsiPeriod);
+  const momentumValue = momentum(closes, config.momentumPeriod);
+  const strength = trendStrength(fast, medium, price);
+  const volatilityValue = volatility(closes, config.momentumPeriod);
+  const atrRatio = atrValue.div(price);
+  const funding = new Decimal(fundingRate);
+  const indicators = {
+    ema20: fast.toFixed(), ema50: medium.toFixed(), ema100: slow.toFixed(), atr14: atrValue.toFixed(),
+    rsi14: rsiValue.toFixed(), momentum20: momentumValue.toFixed(), trendStrength: strength.toFixed(),
+    volatility: volatilityValue.toFixed(), fundingRate: funding.toFixed(),
+  };
+  if (position) {
+    const trailing = updateTrailingStop(position.side, position.stopLoss, price, atrValue, config.trailingAtrMultiple);
+    const stopTriggered = position.side === 'LONG' ? price.lte(position.stopLoss) : price.gte(position.stopLoss);
+    const trendBroken = position.side === 'LONG' ? fast.lt(medium) : fast.gt(medium);
+    return {
+      symbol, signalType: stopTriggered || trendBroken ? 'EXIT' : 'HOLD', strength: stopTriggered ? '1' : trendBroken ? '0.9' : '0',
+      requestedLeverage: '1', price: price.toFixed(), stopLoss: position.stopLoss, takeProfit: null, trailingStop: trailing,
+      reason: stopTriggered ? 'STOP_LOSS' : trendBroken ? 'TREND_BREAK' : 'POSITION_MANAGED', marketDataTimestamp: last.exchangeTimestamp, indicators,
+    };
+  }
+  if (funding.abs().gt(config.maxFundingRateAbs)) return { symbol, signalType: 'HOLD', strength: '0', requestedLeverage: '1', price: price.toFixed(), stopLoss: null, takeProfit: null, trailingStop: null, reason: 'FUNDING_EXTREME', marketDataTimestamp: last.exchangeTimestamp, indicators };
+  if (atrRatio.gt(config.maxAtrRatio) || strength.lt(config.minTrendStrength)) return { symbol, signalType: 'HOLD', strength: '0', requestedLeverage: '1', price: price.toFixed(), stopLoss: null, takeProfit: null, trailingStop: null, reason: atrRatio.gt(config.maxAtrRatio) ? 'HIGH_VOLATILITY' : 'TREND_WEAK', marketDataTimestamp: last.exchangeTimestamp, indicators };
+  const isLong = fast.gt(medium) && medium.gt(slow) && momentumValue.gt(0) && rsiValue.lt(config.longRsiMax);
+  const isShort = fast.lt(medium) && medium.lt(slow) && momentumValue.lt(0) && rsiValue.gt(config.shortRsiMin);
+  if (!isLong && !isShort) return { symbol, signalType: 'HOLD', strength: '0', requestedLeverage: '1', price: price.toFixed(), stopLoss: null, takeProfit: null, trailingStop: null, reason: 'SIDEWAYS', marketDataTimestamp: last.exchangeTimestamp, indicators };
+  const side: FuturesPositionSide = isLong ? 'LONG' : 'SHORT';
+  const direction = isLong ? new Decimal(1) : new Decimal(-1);
+  const stopLoss = price.minus(direction.mul(atrValue).mul(config.stopAtrMultiple));
+  const takeProfit = price.plus(direction.mul(atrValue).mul(config.targetAtrMultiple));
+  const requestedLeverage = volatilityValue.lte('0.01') && strength.gte('0.01') ? '2' : volatilityValue.lte('0.03') ? '1.5' : '1';
+  return { symbol, signalType: side, strength: Decimal.min(1, strength.mul(50).plus('0.5')).toFixed(), requestedLeverage, price: price.toFixed(), stopLoss: stopLoss.toFixed(), takeProfit: takeProfit.toFixed(), trailingStop: stopLoss.toFixed(), reason: 'TREND_CONFIRMED', marketDataTimestamp: last.exchangeTimestamp, indicators };
+};

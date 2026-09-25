@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deriveCircuitState, evaluateSpotRisk, type SpotRiskConfig, type SpotRiskContext } from './index.js';
+import { Decimal } from 'decimal.js';
+import { deriveCircuitState, evaluateFuturesRisk, evaluateSpotRisk, type FuturesRiskConfig, type FuturesRiskContext, type SpotRiskConfig, type SpotRiskContext } from './index.js';
 
 const config: SpotRiskConfig = {
   allowedAssets: ['BTC/USDC', 'ETH/USDC', 'SOL/USDC'], maxSingleAssetExposure: '0.20', maxTotalSpotExposure: '0.80',
@@ -43,4 +44,29 @@ describe('spot risk engine', () => {
     expect(result.reasonCodes).toContain('STALE_MARKET_DATA');
     expect(result.decision).toBe('REJECTED');
   });
+});
+
+const futuresConfig: FuturesRiskConfig = {
+  allowedAssets: ['BTC/USDC-PERP', 'ETH/USDC-PERP', 'SOL/USDC-PERP'], maxLeverage: '3', maxPositionRisk: '0.02', maxAssetExposure: '0.20', maxGrossExposure: '0.65', maxNetExposure: '0.50', maxMarginUsage: '0.50', minLiquidationDistance: '0.20', maxOrderNotional: '25000', maxDailyLoss: '0.02', maxWeeklyLoss: '0.05', maxDrawdown: '0.15', maxFundingRateAbs: '0.001', maxSlippage: '0.005', maxVolatility: '0.12', minLiquidity: '1000000', stalePriceSeconds: 120, reducedRiskLeverage: '1.5', maintenanceMarginRatio: '0.01', liquidationFeeBuffer: '0.005',
+};
+const futuresContext: FuturesRiskContext = {
+  equity: '1300', availableMargin: '1300', marginUsed: '0', grossExposure: '0', netExposure: '0', assetExposure: '0', dailyPnlRatio: '0', weeklyPnlRatio: '0', drawdown: '0', fundingRate: '0.0001', volatility: '0.02', marketLiquidity: '100000000', estimatedSlippage: '0.0005', now: 1_000_000, circuitState: 'RUNNING',
+};
+const futuresProposal = { symbol: 'BTC/USDC-PERP', side: 'OPEN_LONG' as const, requestedNotional: '100', requestedLeverage: '2', expectedPrice: '100', stopLoss: '95', maxSlippage: '0.005', marketDataTimestamp: 1_000_000 };
+
+describe('futures risk engine', () => {
+  it('requires a stop for every new LONG or SHORT', () => { expect(evaluateFuturesRisk({ ...futuresProposal, stopLoss: null }, futuresContext, futuresConfig).reasonCodes).toContain('STOP_LOSS_REQUIRED'); });
+  it('reduces leverage above 3x', () => { const result = evaluateFuturesRisk({ ...futuresProposal, requestedLeverage: '4' }, futuresContext, futuresConfig); expect(result.approvedLeverage).toBe('3'); expect(result.decision).toBe('REDUCED'); });
+  it('reduces 1000 notional at 5% stop distance to the 2% NAV risk budget', () => { const result = evaluateFuturesRisk({ ...futuresProposal, requestedNotional: '1000' }, futuresContext, futuresConfig); expect(result.decision).toBe('REDUCED'); expect(new Decimal(result.approvedNotional).lte(520)).toBe(true); expect(new Decimal(result.maxLossAtStop).lte(26)).toBe(true); });
+  it('enforces asset, gross, net and margin caps', () => {
+    expect(evaluateFuturesRisk(futuresProposal, { ...futuresContext, assetExposure: '260' }, futuresConfig).decision).toBe('REJECTED');
+    expect(evaluateFuturesRisk(futuresProposal, { ...futuresContext, grossExposure: '845' }, futuresConfig).decision).toBe('REJECTED');
+    expect(evaluateFuturesRisk(futuresProposal, { ...futuresContext, netExposure: '650' }, futuresConfig).decision).toBe('REJECTED');
+    expect(evaluateFuturesRisk(futuresProposal, { ...futuresContext, marginUsed: '650', availableMargin: '650' }, futuresConfig).decision).toBe('REJECTED');
+  });
+  it('rejects unsafe liquidation distance and extreme funding', () => {
+    expect(evaluateFuturesRisk({ ...futuresProposal, requestedLeverage: '5' }, futuresContext, { ...futuresConfig, maxLeverage: '10' }).reasonCodes).toContain('LIQUIDATION_DISTANCE_LIMIT');
+    expect(evaluateFuturesRisk(futuresProposal, { ...futuresContext, fundingRate: '0.01' }, futuresConfig).reasonCodes).toContain('FUNDING_RATE_LIMIT');
+  });
+  it('allows reduce-only actions while risk-off', () => { expect(evaluateFuturesRisk({ ...futuresProposal, side: 'CLOSE_LONG' }, { ...futuresContext, circuitState: 'RISK_OFF' }, futuresConfig).decision).toBe('APPROVED'); });
 });

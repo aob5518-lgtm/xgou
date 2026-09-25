@@ -74,3 +74,21 @@ flowchart LR
 ## Planned boundaries
 
 Phase 2B 增加 Arc Chain Registry、finality adapter 和 Vault contracts。Phase 3 增加隔离的 Spot/Futures Paper accounts、risk engine 和 execution adapters。Phase 4 增加 NAV、High Water Mark、Loss Carryforward、Reward Pool 和提现费。未完成模块不会用占位接口伪装成可用功能。
+# Phase 3B futures paper pipeline
+
+```text
+FuturesVault (read-only reference)
+  -> Ledger Futures Capital (read-only mirror)
+  -> Paper Futures Strategy Account
+  -> Public / Fixture Market Data
+  -> FUTURES_TREND_V1 Signal
+  -> Futures Risk Engine
+  -> Paper Perp Execution
+  -> Margin / One-way Position
+  -> MTM / Funding
+  -> Futures NAV / Circuit
+
+NO REAL FUNDS MOVE
+```
+
+Spot and Futures use separate accounts, positions, baselines, circuit state, cycle IDs, and Redis locks. Paper performance is illustrative and is excluded from real Ledger balances, Dashboard total assets, and Rewards.
