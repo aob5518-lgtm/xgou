@@ -14,6 +14,8 @@
     "db:generate": "pnpm --filter @xgou/database generate",
     "db:migrate": "pnpm --filter @xgou/database migrate",
     "db:seed": "pnpm --filter @xgou/database seed",
+    "security:scan": "node scripts/security-scan.mjs && node scripts/dangerous-call-scan.mjs",
+    "audit:production": "pnpm audit --prod --audit-level=high",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration"
   },
   "devDependencies": {

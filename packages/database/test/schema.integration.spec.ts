@@ -26,6 +26,10 @@ const rewardFinalizeMigrationPath = new URL(
   '../prisma/migrations/20260928120000_finalize_reward_epoch_accounting/migration.sql',
   import.meta.url,
 );
+const phase5MigrationPath = new URL(
+  '../prisma/migrations/20260929120000_phase5_production_hardening/migration.sql',
+  import.meta.url,
+);
 
 describe('Phase 1 database artifacts', () => {
   it('stores asset and XP amounts as Decimal and defines the referral closure identity', async () => {
@@ -131,5 +135,25 @@ describe('Phase 4 paper reward settlement persistence', () => {
     expect(schema).toContain('@@unique([rewardEpochId, strategyCode])');
     expect(migration).toContain('EpochSettlementBaseline_rewardEpochId_strategyCode_key');
     expect(migration).toContain('EpochSettlementBaseline_immutable');
+  });
+});
+
+describe('Phase 5 production hardening persistence', () => {
+  it('stores references, approvals, dry-run executions, limits, incidents and operational risk without secrets', async () => {
+    const [schema, migration] = await Promise.all([readFile(schemaPath, 'utf8'), readFile(phase5MigrationPath, 'utf8')]);
+    for (const model of ['ExchangeCredentialProfile', 'RolePolicy', 'ApprovalRequest', 'ExecutionAuthorization', 'DryRunExecution', 'AddressAllowlist', 'ProtocolAllowlist', 'ExecutionLimitPolicy', 'OperationalRiskSnapshot', 'Incident', 'SecurityEvent']) {
+      expect(schema).toContain(`model ${model}`);
+      expect(migration).toContain(`CREATE TABLE "${model}"`);
+    }
+    expect(schema).toContain('credentialReference');
+    expect(schema).not.toContain('privateKey');
+    expect(schema).not.toContain('apiSecret');
+  });
+
+  it('enforces order and approval idempotency with database unique indexes', async () => {
+    const migration = await readFile(phase5MigrationPath, 'utf8');
+    expect(migration).toContain('DryRunExecution_clientOrderId_key');
+    expect(migration).toContain('Approval_approvalRequestId_approverId_key');
+    expect(migration).toContain('AddressAllowlist_chainId_address_key');
   });
 });

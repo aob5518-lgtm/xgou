@@ -79,6 +79,17 @@ export const SYSTEM_CONFIG_DEFAULTS = {
   futuresMinLiquidityUsd: '1000000',
   futuresMaxVolatility: '0.12',
   rewardRiskReserveRate: '0',
+  globalTradingStateDefault: 'ACTIVE',
+  executionAuthorizationTtlSeconds: 30,
+  maxPriceDeviationBps: '100',
+  maxUnknownOrders: 3,
+  maxOrderFailureRate: '0.05',
+  maxOrdersPerMinute: 10,
+  maxOrdersPerHour: 100,
+  globalDailyNotionalLimit: '100000',
+  reconciliationCriticalThreshold: '1',
+  keyHealthRequired: true,
+  exchangeHealthRequired: true,
 } as const;
 
 const nonNegativeDecimalString = z.string().regex(/^\d+(?:\.\d+)?$/);
@@ -142,6 +153,17 @@ export const systemConfigSchema = z
     futuresMinLiquidityUsd: nonNegativeDecimalString,
     futuresMaxVolatility: ratioString,
     rewardRiskReserveRate: ratioString,
+    globalTradingStateDefault: z.enum(['ACTIVE', 'REDUCE_ONLY', 'PAUSED', 'EMERGENCY_STOP']),
+    executionAuthorizationTtlSeconds: z.number().int().min(1).max(300),
+    maxPriceDeviationBps: nonNegativeDecimalString,
+    maxUnknownOrders: z.number().int().min(0).max(1000),
+    maxOrderFailureRate: ratioString,
+    maxOrdersPerMinute: z.number().int().min(1).max(10000),
+    maxOrdersPerHour: z.number().int().min(1).max(100000),
+    globalDailyNotionalLimit: nonNegativeDecimalString,
+    reconciliationCriticalThreshold: nonNegativeDecimalString,
+    keyHealthRequired: z.boolean(),
+    exchangeHealthRequired: z.boolean(),
   })
   .superRefine((config, context) => {
     const total = new Decimal(config.bullAllocation)

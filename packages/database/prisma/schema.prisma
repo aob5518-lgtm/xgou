@@ -11,7 +11,103 @@ enum UserRole {
   USER
   OPERATOR
   RISK_MANAGER
+  TREASURY_OPERATOR
+  SECURITY_ADMIN
+  AUDITOR
   ADMIN
+}
+
+enum ProductionEnvironment {
+  DEVELOPMENT
+  TESTNET
+  PRODUCTION
+}
+
+enum PrincipalType {
+  EOA_DEV
+  MULTISIG
+  MPC
+  HSM
+  KMS
+  CUSTODY
+  SERVICE_IDENTITY
+}
+
+enum PolicyStatus {
+  ACTIVE
+  DISABLED
+  EXPIRED
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  EXECUTED
+}
+
+enum ApprovalDecision {
+  APPROVE
+  REJECT
+}
+
+enum ExecutionMode {
+  PAPER
+  DRY_RUN
+  SANDBOX
+  LIVE
+}
+
+enum GlobalTradingState {
+  ACTIVE
+  REDUCE_ONLY
+  PAUSED
+  EMERGENCY_STOP
+}
+
+enum ExecutionState {
+  AUTHORIZED
+  SUBMITTING
+  SUBMITTED
+  ACKNOWLEDGED
+  PARTIALLY_FILLED
+  FILLED
+  CANCEL_REQUESTED
+  CANCELLED
+  REJECTED
+  UNKNOWN
+  RECONCILIATION_REQUIRED
+}
+
+enum IncidentSeverity {
+  INFO
+  WARNING
+  CRITICAL
+  EMERGENCY
+}
+
+enum IncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  MITIGATING
+  RESOLVED
+  POSTMORTEM_REQUIRED
+}
+
+enum AllowlistStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum SecurityEventType {
+  INVALID_PRODUCTION_KEY_PROVIDER
+  WITHDRAW_PERMISSION_DETECTED
+  MAINNET_GATE_BYPASS_ATTEMPT
+  SECRET_IN_LOG_DETECTED
+  UNAUTHORIZED_TREASURY_ACTION
 }
 
 enum ParticipationStatus {
@@ -271,19 +367,19 @@ enum UserRewardStatus {
 }
 
 model User {
-  id                  String             @id @default(uuid()) @db.Uuid
-  walletAddress       String             @unique @db.VarChar(42)
-  role                UserRole           @default(USER)
-  deviceFingerprint   String?            @db.VarChar(128)
-  registrationIpHash  String?            @db.VarChar(64)
-  riskScore           Decimal            @default(0) @db.Decimal(8, 4)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  id                  String                 @id @default(uuid()) @db.Uuid
+  walletAddress       String                 @unique @db.VarChar(42)
+  role                UserRole               @default(USER)
+  deviceFingerprint   String?                @db.VarChar(128)
+  registrationIpHash  String?                @db.VarChar(64)
+  riskScore           Decimal                @default(0) @db.Decimal(8, 4)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
   sessions            RefreshSession[]
-  inviterEdge         ReferralEdge?      @relation("ReferralDescendant")
-  directReferrals     ReferralEdge[]     @relation("ReferralAncestor")
-  referralAncestors   ReferralClosure[]  @relation("ClosureDescendant")
-  referralDescendants ReferralClosure[]  @relation("ClosureAncestor")
+  inviterEdge         ReferralEdge?          @relation("ReferralDescendant")
+  directReferrals     ReferralEdge[]         @relation("ReferralAncestor")
+  referralAncestors   ReferralClosure[]      @relation("ClosureDescendant")
+  referralDescendants ReferralClosure[]      @relation("ClosureAncestor")
   participations      Participation[]
   principalXpEntries  PrincipalXpEntry[]
   xpSnapshots         XpSnapshot[]
@@ -370,49 +466,49 @@ model PrincipalXpEntry {
 }
 
 model RewardEpoch {
-  id                        String            @id @default(uuid()) @db.Uuid
+  id                        String                     @id @default(uuid()) @db.Uuid
   number                    Int
   startsAt                  DateTime
   endsAt                    DateTime
-  status                    RewardEpochStatus @default(OPEN)
-  mode                      RewardMode        @default(PAPER)
-  configVersion             Int               @default(1)
-  spotStartNav              Decimal           @default(0) @db.Decimal(36, 18)
-  spotEndNav                Decimal           @default(0) @db.Decimal(36, 18)
-  spotRealizedGross         Decimal           @default(0) @db.Decimal(36, 18)
-  spotFees                  Decimal           @default(0) @db.Decimal(36, 18)
-  spotSlippage              Decimal           @default(0) @db.Decimal(36, 18)
-  spotNetRealized           Decimal           @default(0) @db.Decimal(36, 18)
-  futuresStartNav           Decimal           @default(0) @db.Decimal(36, 18)
-  futuresEndNav             Decimal           @default(0) @db.Decimal(36, 18)
-  futuresRealizedGross      Decimal           @default(0) @db.Decimal(36, 18)
-  futuresFunding            Decimal           @default(0) @db.Decimal(36, 18)
-  futuresFees               Decimal           @default(0) @db.Decimal(36, 18)
-  futuresLiquidationPenalty Decimal           @default(0) @db.Decimal(36, 18)
-  futuresSlippage           Decimal           @default(0) @db.Decimal(36, 18)
-  futuresNetRealized        Decimal           @default(0) @db.Decimal(36, 18)
-  grossNetRealized          Decimal           @default(0) @db.Decimal(36, 18)
-  lossCarryforwardBefore    Decimal           @default(0) @db.Decimal(36, 18)
-  lossCarryforwardApplied   Decimal           @default(0) @db.Decimal(36, 18)
-  lossCarryforwardAfter     Decimal           @default(0) @db.Decimal(36, 18)
-  hwmBefore                 Decimal           @default(0) @db.Decimal(36, 18)
-  hwmAfter                  Decimal           @default(0) @db.Decimal(36, 18)
-  distributableProfit       Decimal           @default(0) @db.Decimal(36, 18)
-  riskReserve               Decimal           @default(0) @db.Decimal(36, 18)
-  rewardPool                Decimal           @default(0) @db.Decimal(36, 18)
-  totalEffectiveXp          Decimal           @default(0) @db.Decimal(36, 18)
-  rewardDust                Decimal           @default(0) @db.Decimal(36, 18)
-  error                     String?            @db.VarChar(1024)
+  status                    RewardEpochStatus          @default(OPEN)
+  mode                      RewardMode                 @default(PAPER)
+  configVersion             Int                        @default(1)
+  spotStartNav              Decimal                    @default(0) @db.Decimal(36, 18)
+  spotEndNav                Decimal                    @default(0) @db.Decimal(36, 18)
+  spotRealizedGross         Decimal                    @default(0) @db.Decimal(36, 18)
+  spotFees                  Decimal                    @default(0) @db.Decimal(36, 18)
+  spotSlippage              Decimal                    @default(0) @db.Decimal(36, 18)
+  spotNetRealized           Decimal                    @default(0) @db.Decimal(36, 18)
+  futuresStartNav           Decimal                    @default(0) @db.Decimal(36, 18)
+  futuresEndNav             Decimal                    @default(0) @db.Decimal(36, 18)
+  futuresRealizedGross      Decimal                    @default(0) @db.Decimal(36, 18)
+  futuresFunding            Decimal                    @default(0) @db.Decimal(36, 18)
+  futuresFees               Decimal                    @default(0) @db.Decimal(36, 18)
+  futuresLiquidationPenalty Decimal                    @default(0) @db.Decimal(36, 18)
+  futuresSlippage           Decimal                    @default(0) @db.Decimal(36, 18)
+  futuresNetRealized        Decimal                    @default(0) @db.Decimal(36, 18)
+  grossNetRealized          Decimal                    @default(0) @db.Decimal(36, 18)
+  lossCarryforwardBefore    Decimal                    @default(0) @db.Decimal(36, 18)
+  lossCarryforwardApplied   Decimal                    @default(0) @db.Decimal(36, 18)
+  lossCarryforwardAfter     Decimal                    @default(0) @db.Decimal(36, 18)
+  hwmBefore                 Decimal                    @default(0) @db.Decimal(36, 18)
+  hwmAfter                  Decimal                    @default(0) @db.Decimal(36, 18)
+  distributableProfit       Decimal                    @default(0) @db.Decimal(36, 18)
+  riskReserve               Decimal                    @default(0) @db.Decimal(36, 18)
+  rewardPool                Decimal                    @default(0) @db.Decimal(36, 18)
+  totalEffectiveXp          Decimal                    @default(0) @db.Decimal(36, 18)
+  rewardDust                Decimal                    @default(0) @db.Decimal(36, 18)
+  error                     String?                    @db.VarChar(1024)
   settledAt                 DateTime?
   finalizedAt               DateTime?
-  createdAt                 DateTime           @default(now())
-  config                    SystemConfigVersion @relation(fields: [configVersion], references: [version], onDelete: Restrict)
+  createdAt                 DateTime                   @default(now())
+  config                    SystemConfigVersion        @relation(fields: [configVersion], references: [version], onDelete: Restrict)
   snapshots                 XpSnapshot[]
   settlementBaselines       EpochSettlementBaseline[]
   sourceSnapshots           SettlementSourceSnapshot[]
   allocations               UserRewardAllocation[]
   auditEvents               RewardAuditEvent[]
-  finalizedFundState        RewardFundState?   @relation("LastFinalizedRewardEpoch")
+  finalizedFundState        RewardFundState?           @relation("LastFinalizedRewardEpoch")
 
   @@unique([mode, number])
   @@unique([mode, startsAt])
@@ -779,46 +875,46 @@ model StrategyVersion {
 }
 
 model StrategyAccount {
-  id                String                @id @default(uuid()) @db.Uuid
-  strategyId        String                @unique @db.Uuid
-  status            StrategyAccountStatus @default(ACTIVE)
-  asset             String                @default("USDC") @db.VarChar(12)
-  allocatedCapital  Decimal               @default(0) @db.Decimal(36, 18)
-  activeCapital     Decimal               @default(0) @db.Decimal(36, 18)
-  cashBalance       Decimal               @default(0) @db.Decimal(36, 18)
-  reserveBalance    Decimal               @default(0) @db.Decimal(36, 18)
-  nav               Decimal               @default(0) @db.Decimal(36, 18)
-  equity            Decimal               @default(0) @db.Decimal(36, 18)
-  highWaterMark     Decimal               @default(0) @db.Decimal(36, 18)
-  realizedPnl       Decimal               @default(0) @db.Decimal(36, 18)
-  unrealizedPnl     Decimal               @default(0) @db.Decimal(36, 18)
-  dailyPnl          Decimal               @default(0) @db.Decimal(36, 18)
-  dailyOpeningNav   Decimal               @default(0) @db.Decimal(36, 18)
-  dailyPnlRatio     Decimal               @default(0) @db.Decimal(36, 18)
-  dailyBaselineAt   DateTime?
-  weeklyPnl         Decimal               @default(0) @db.Decimal(36, 18)
-  weeklyOpeningNav  Decimal               @default(0) @db.Decimal(36, 18)
-  weeklyPnlRatio    Decimal               @default(0) @db.Decimal(36, 18)
-  weeklyBaselineAt  DateTime?
-  drawdown          Decimal               @default(0) @db.Decimal(36, 18)
-  marginUsed        Decimal               @default(0) @db.Decimal(36, 18)
-  availableMargin   Decimal               @default(0) @db.Decimal(36, 18)
-  grossExposure     Decimal               @default(0) @db.Decimal(36, 18)
-  netExposure       Decimal               @default(0) @db.Decimal(36, 18)
-  fundingPnl        Decimal               @default(0) @db.Decimal(36, 18)
-  fees              Decimal               @default(0) @db.Decimal(36, 18)
-  consecutiveLosses Int                   @default(0)
-  grossRealizedPnl  Decimal               @default(0) @db.Decimal(36, 18)
-  netRealizedPnl    Decimal               @default(0) @db.Decimal(36, 18)
-  slippageCost      Decimal               @default(0) @db.Decimal(36, 18)
-  liquidationPenalty Decimal              @default(0) @db.Decimal(36, 18)
-  updatedAt         DateTime              @updatedAt
-  strategy          Strategy              @relation(fields: [strategyId], references: [id], onDelete: Restrict)
-  allocations       StrategyAllocation[]
-  positions         Position[]
-  pnl               StrategyPnL[]
-  navSnapshots      NavSnapshot[]
-  futuresPositions  FuturesPosition[]
+  id                 String                @id @default(uuid()) @db.Uuid
+  strategyId         String                @unique @db.Uuid
+  status             StrategyAccountStatus @default(ACTIVE)
+  asset              String                @default("USDC") @db.VarChar(12)
+  allocatedCapital   Decimal               @default(0) @db.Decimal(36, 18)
+  activeCapital      Decimal               @default(0) @db.Decimal(36, 18)
+  cashBalance        Decimal               @default(0) @db.Decimal(36, 18)
+  reserveBalance     Decimal               @default(0) @db.Decimal(36, 18)
+  nav                Decimal               @default(0) @db.Decimal(36, 18)
+  equity             Decimal               @default(0) @db.Decimal(36, 18)
+  highWaterMark      Decimal               @default(0) @db.Decimal(36, 18)
+  realizedPnl        Decimal               @default(0) @db.Decimal(36, 18)
+  unrealizedPnl      Decimal               @default(0) @db.Decimal(36, 18)
+  dailyPnl           Decimal               @default(0) @db.Decimal(36, 18)
+  dailyOpeningNav    Decimal               @default(0) @db.Decimal(36, 18)
+  dailyPnlRatio      Decimal               @default(0) @db.Decimal(36, 18)
+  dailyBaselineAt    DateTime?
+  weeklyPnl          Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyOpeningNav   Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyPnlRatio     Decimal               @default(0) @db.Decimal(36, 18)
+  weeklyBaselineAt   DateTime?
+  drawdown           Decimal               @default(0) @db.Decimal(36, 18)
+  marginUsed         Decimal               @default(0) @db.Decimal(36, 18)
+  availableMargin    Decimal               @default(0) @db.Decimal(36, 18)
+  grossExposure      Decimal               @default(0) @db.Decimal(36, 18)
+  netExposure        Decimal               @default(0) @db.Decimal(36, 18)
+  fundingPnl         Decimal               @default(0) @db.Decimal(36, 18)
+  fees               Decimal               @default(0) @db.Decimal(36, 18)
+  consecutiveLosses  Int                   @default(0)
+  grossRealizedPnl   Decimal               @default(0) @db.Decimal(36, 18)
+  netRealizedPnl     Decimal               @default(0) @db.Decimal(36, 18)
+  slippageCost       Decimal               @default(0) @db.Decimal(36, 18)
+  liquidationPenalty Decimal               @default(0) @db.Decimal(36, 18)
+  updatedAt          DateTime              @updatedAt
+  strategy           Strategy              @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+  allocations        StrategyAllocation[]
+  positions          Position[]
+  pnl                StrategyPnL[]
+  navSnapshots       NavSnapshot[]
+  futuresPositions   FuturesPosition[]
 }
 
 model StrategyAllocation {
@@ -1169,7 +1265,7 @@ model RewardSettlementCursor {
   fees               Decimal    @default(0) @db.Decimal(36, 18)
   fundingPnl         Decimal    @default(0) @db.Decimal(36, 18)
   slippageCost       Decimal    @default(0) @db.Decimal(36, 18)
-  liquidationPenalty Decimal   @default(0) @db.Decimal(36, 18)
+  liquidationPenalty Decimal    @default(0) @db.Decimal(36, 18)
   nav                Decimal    @default(0) @db.Decimal(36, 18)
   updatedAt          DateTime   @updatedAt
 
@@ -1177,43 +1273,43 @@ model RewardSettlementCursor {
 }
 
 model EpochSettlementBaseline {
-  id                     String      @id @default(uuid()) @db.Uuid
-  rewardEpochId          String      @db.Uuid
-  strategyCode           String      @db.VarChar(64)
-  nav                    Decimal     @db.Decimal(36, 18)
-  realizedPnl            Decimal     @db.Decimal(36, 18)
-  grossRealizedPnl       Decimal     @db.Decimal(36, 18)
-  fees                   Decimal     @db.Decimal(36, 18)
-  fundingPnl             Decimal     @db.Decimal(36, 18)
-  slippageCost           Decimal     @db.Decimal(36, 18)
-  liquidationPenalty     Decimal     @db.Decimal(36, 18)
-  capturedAt             DateTime    @default(now())
-  rewardEpoch            RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+  id                 String      @id @default(uuid()) @db.Uuid
+  rewardEpochId      String      @db.Uuid
+  strategyCode       String      @db.VarChar(64)
+  nav                Decimal     @db.Decimal(36, 18)
+  realizedPnl        Decimal     @db.Decimal(36, 18)
+  grossRealizedPnl   Decimal     @db.Decimal(36, 18)
+  fees               Decimal     @db.Decimal(36, 18)
+  fundingPnl         Decimal     @db.Decimal(36, 18)
+  slippageCost       Decimal     @db.Decimal(36, 18)
+  liquidationPenalty Decimal     @db.Decimal(36, 18)
+  capturedAt         DateTime    @default(now())
+  rewardEpoch        RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
 
   @@unique([rewardEpochId, strategyCode])
   @@index([strategyCode, capturedAt])
 }
 
 model SettlementSourceSnapshot {
-  id                 String      @id @default(uuid()) @db.Uuid
-  rewardEpochId      String      @db.Uuid
-  strategyCode       String      @db.VarChar(64)
-  startNav           Decimal     @db.Decimal(36, 18)
-  endNav             Decimal     @db.Decimal(36, 18)
-  grossRealizedPnl   Decimal     @db.Decimal(36, 18)
-  tradingFees        Decimal     @db.Decimal(36, 18)
-  fundingPnl         Decimal     @db.Decimal(36, 18)
-  slippageCost       Decimal     @db.Decimal(36, 18)
-  liquidationPenalty Decimal     @db.Decimal(36, 18)
-  netRealizedPnl     Decimal     @db.Decimal(36, 18)
-  cumulativeRealizedPnl Decimal  @db.Decimal(36, 18)
-  cumulativeGrossRealizedPnl Decimal @db.Decimal(36, 18)
-  cumulativeFees Decimal         @db.Decimal(36, 18)
-  cumulativeFundingPnl Decimal   @db.Decimal(36, 18)
-  cumulativeSlippageCost Decimal @db.Decimal(36, 18)
-  cumulativeLiquidationPenalty Decimal @db.Decimal(36, 18)
-  frozenAt           DateTime    @default(now())
-  rewardEpoch        RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+  id                           String      @id @default(uuid()) @db.Uuid
+  rewardEpochId                String      @db.Uuid
+  strategyCode                 String      @db.VarChar(64)
+  startNav                     Decimal     @db.Decimal(36, 18)
+  endNav                       Decimal     @db.Decimal(36, 18)
+  grossRealizedPnl             Decimal     @db.Decimal(36, 18)
+  tradingFees                  Decimal     @db.Decimal(36, 18)
+  fundingPnl                   Decimal     @db.Decimal(36, 18)
+  slippageCost                 Decimal     @db.Decimal(36, 18)
+  liquidationPenalty           Decimal     @db.Decimal(36, 18)
+  netRealizedPnl               Decimal     @db.Decimal(36, 18)
+  cumulativeRealizedPnl        Decimal     @db.Decimal(36, 18)
+  cumulativeGrossRealizedPnl   Decimal     @db.Decimal(36, 18)
+  cumulativeFees               Decimal     @db.Decimal(36, 18)
+  cumulativeFundingPnl         Decimal     @db.Decimal(36, 18)
+  cumulativeSlippageCost       Decimal     @db.Decimal(36, 18)
+  cumulativeLiquidationPenalty Decimal     @db.Decimal(36, 18)
+  frozenAt                     DateTime    @default(now())
+  rewardEpoch                  RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
 
   @@unique([rewardEpochId, strategyCode])
 }
@@ -1252,6 +1348,220 @@ model RewardAuditEvent {
   createdAt     DateTime    @default(now())
   rewardEpoch   RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
 
-  @@index([rewardEpochId, createdAt])
   @@unique([rewardEpochId, type])
+  @@index([rewardEpochId, createdAt])
+}
+
+model ExchangeCredentialProfile {
+  id                  String                @id @default(uuid()) @db.Uuid
+  exchange            String                @db.VarChar(64)
+  accountId           String                @db.VarChar(128)
+  subaccountId        String?               @db.VarChar(128)
+  credentialReference String                @db.VarChar(512)
+  permissions         String[]
+  environment         ProductionEnvironment
+  status              PolicyStatus          @default(ACTIVE)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@unique([exchange, accountId, subaccountId, environment])
+  @@index([environment, status])
+}
+
+model RolePolicy {
+  id                 String                @id @default(uuid()) @db.Uuid
+  environment        ProductionEnvironment
+  role               String                @db.VarChar(64)
+  principalType      PrincipalType
+  principalReference String                @db.VarChar(512)
+  requiredApprovals  Int
+  status             PolicyStatus          @default(ACTIVE)
+  effectiveAt        DateTime
+  createdAt          DateTime              @default(now())
+
+  @@index([environment, role, status])
+}
+
+model ApprovalRequest {
+  id                String                @id @default(uuid()) @db.Uuid
+  actionType        String                @db.VarChar(128)
+  resourceType      String                @db.VarChar(128)
+  resourceId        String                @db.VarChar(256)
+  requestedBy       String                @db.VarChar(128)
+  requiredApprovals Int
+  expiresAt         DateTime
+  status            ApprovalRequestStatus @default(PENDING)
+  createdAt         DateTime              @default(now())
+  approvals         Approval[]
+
+  @@index([status, expiresAt])
+}
+
+model Approval {
+  id                String           @id @default(uuid()) @db.Uuid
+  approvalRequestId String           @db.Uuid
+  approverId        String           @db.VarChar(128)
+  decision          ApprovalDecision
+  timestamp         DateTime         @default(now())
+  request           ApprovalRequest  @relation(fields: [approvalRequestId], references: [id], onDelete: Restrict)
+
+  @@unique([approvalRequestId, approverId])
+}
+
+model ExecutionAuthorization {
+  id                 String                @id @default(uuid()) @db.Uuid
+  proposalId         String                @db.Uuid
+  riskDecisionId     String                @db.Uuid
+  executionMode      ExecutionMode
+  environment        ProductionEnvironment
+  policyStatus       String                @db.VarChar(32)
+  riskStatus         String                @db.VarChar(32)
+  globalTradingState GlobalTradingState
+  authorizedBy       String                @db.VarChar(128)
+  referencePrice     Decimal               @db.Decimal(36, 18)
+  expiresAt          DateTime
+  createdAt          DateTime              @default(now())
+
+  @@index([proposalId, expiresAt])
+}
+
+model DryRunExecution {
+  id                  String         @id @default(uuid()) @db.Uuid
+  proposalId          String         @db.Uuid
+  clientOrderId       String         @unique @db.VarChar(128)
+  exchange            String         @db.VarChar(64)
+  symbol              String         @db.VarChar(64)
+  side                String         @db.VarChar(32)
+  type                String         @db.VarChar(32)
+  quantity            Decimal        @db.Decimal(36, 18)
+  price               Decimal?       @db.Decimal(36, 18)
+  reduceOnly          Boolean
+  timeInForce         String         @db.VarChar(16)
+  leverage            Decimal?       @db.Decimal(18, 8)
+  credentialProfileId String?        @db.Uuid
+  policyDecision      Json
+  riskDecision        Json
+  state               ExecutionState @default(ACKNOWLEDGED)
+  createdAt           DateTime       @default(now())
+
+  @@index([state, createdAt])
+}
+
+model TreasuryTransferRequest {
+  id             String         @id @default(uuid()) @db.Uuid
+  source         String         @db.VarChar(256)
+  destination    String         @db.VarChar(256)
+  asset          String         @db.VarChar(16)
+  amount         Decimal        @db.Decimal(36, 18)
+  reason         String         @db.VarChar(512)
+  requestedBy    String         @db.VarChar(128)
+  policyDecision Json
+  approvalState  String         @db.VarChar(32)
+  executionState ExecutionState @default(AUTHORIZED)
+  txHash         String?        @db.VarChar(66)
+  createdAt      DateTime       @default(now())
+
+  @@index([approvalState, createdAt])
+}
+
+model AddressAllowlist {
+  id          String          @id @default(uuid()) @db.Uuid
+  chainId     String          @db.VarChar(64)
+  address     String          @db.VarChar(128)
+  label       String          @db.VarChar(128)
+  purpose     String          @db.VarChar(256)
+  status      AllowlistStatus @default(PENDING)
+  approvedBy  String?         @db.VarChar(128)
+  effectiveAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@unique([chainId, address])
+}
+
+model ProtocolAllowlist {
+  id          String          @id @default(uuid()) @db.Uuid
+  chainId     String          @db.VarChar(64)
+  protocol    String          @db.VarChar(128)
+  contract    String          @db.VarChar(128)
+  purpose     String          @db.VarChar(256)
+  status      AllowlistStatus @default(PENDING)
+  approvedBy  String?         @db.VarChar(128)
+  effectiveAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@unique([chainId, contract])
+}
+
+model ExecutionLimitPolicy {
+  id                    String                @id @default(uuid()) @db.Uuid
+  environment           ProductionEnvironment
+  strategyId            String?               @db.Uuid
+  asset                 String?               @db.VarChar(16)
+  perTradeLimit         Decimal               @db.Decimal(36, 18)
+  perAssetDailyLimit    Decimal               @db.Decimal(36, 18)
+  perStrategyDailyLimit Decimal               @db.Decimal(36, 18)
+  perTreasuryDailyLimit Decimal               @db.Decimal(36, 18)
+  globalDailyLimit      Decimal               @db.Decimal(36, 18)
+  maxOrdersPerMinute    Int
+  maxOrdersPerHour      Int
+  maxNotionalPerMinute  Decimal               @db.Decimal(36, 18)
+  maxNotionalPerHour    Decimal               @db.Decimal(36, 18)
+  status                PolicyStatus          @default(ACTIVE)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@index([environment, status])
+}
+
+model OperationalRiskSnapshot {
+  id                   String             @id @default(uuid()) @db.Uuid
+  exchangeHealth       String             @db.VarChar(32)
+  marketDataHealth     String             @db.VarChar(32)
+  keyProviderHealth    String             @db.VarChar(32)
+  reconciliationHealth String             @db.VarChar(32)
+  unknownOrders        Int
+  errorRate            Decimal            @db.Decimal(18, 8)
+  globalState          GlobalTradingState
+  capturedAt           DateTime           @default(now())
+
+  @@index([capturedAt])
+}
+
+model Incident {
+  id               String           @id @default(uuid()) @db.Uuid
+  severity         IncidentSeverity
+  type             String           @db.VarChar(128)
+  status           IncidentStatus   @default(OPEN)
+  detectedAt       DateTime         @default(now())
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  owner            String?          @db.VarChar(128)
+  summary          String           @db.VarChar(512)
+  details          Json
+  linkedRiskEvents String[]
+
+  @@index([status, severity, detectedAt])
+}
+
+model SecurityEvent {
+  id         String            @id @default(uuid()) @db.Uuid
+  type       SecurityEventType
+  severity   IncidentSeverity
+  details    Json
+  detectedAt DateTime          @default(now())
+  resolvedAt DateTime?
+
+  @@index([type, detectedAt])
+}
+
+model CredentialRotationPolicy {
+  id                  String       @id @default(uuid()) @db.Uuid
+  credentialProfileId String       @db.Uuid
+  rotationInterval    Int
+  lastRotatedAt       DateTime?
+  expiresAt           DateTime?
+  status              PolicyStatus @default(ACTIVE)
+  createdAt           DateTime     @default(now())
+
+  @@unique([credentialProfileId])
 }

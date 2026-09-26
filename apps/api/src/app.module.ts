@@ -14,6 +14,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
 import { SpotAgentModule } from './spot-agent/spot-agent.module.js';
 import { FuturesAgentModule } from './futures-agent/futures-agent.module.js';
 import { RewardsModule } from './rewards/rewards.module.js';
+import { OperationsModule } from './operations/operations.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { RewardsModule } from './rewards/rewards.module.js';
     SpotAgentModule,
     FuturesAgentModule,
     RewardsModule,
+    OperationsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
