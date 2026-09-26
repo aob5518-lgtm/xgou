@@ -7,12 +7,17 @@ import { BrainFallback } from './BrainFallback';
 import { BrainOverlay } from './BrainOverlay';
 
 const BrainParticles = dynamic(() => import('./BrainParticles'), { ssr: false, loading: () => <BrainFallback /> });
+const animatedBrainEnabled = process.env.NEXT_PUBLIC_ENABLE_WEBGL_BRAIN === 'true';
 
 export function XgouBrain({ compact = false }: { readonly compact?: boolean }) {
   const [webgl, setWebgl] = useState<boolean | null>(null);
   const [reduced, setReduced] = useState(false);
   const [focus, setFocus] = useState<BrainFocus>(null);
   useEffect(() => {
+    if (!animatedBrainEnabled) {
+      setWebgl(false);
+      return;
+    }
     setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     try { const canvas = document.createElement('canvas'); setWebgl(Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))); } catch { setWebgl(false); }
   }, []);
