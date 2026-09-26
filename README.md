@@ -1,6 +1,6 @@
 # XGOU Core Platform
 
-XGOU（小狗）是面向 Crypto 市场周期的资产配置、策略交易与 XP 收益权重平台。本仓库采用 `pnpm + Turborepo`，当前完成 Phase 1、Phase 2A 与 Phase 2.5 Frontend Preview：身份与 XP 网络、资金域模型、50/30/20 分配、双重记账 Ledger 和不依赖后端的高保真 Demo 前端。所有资金环境默认并将持续保持 Local / Testnet / Sandbox / Paper Trading，任何真实场所或真实私钥必须通过后续 Adapter 接入。
+XGOU（小狗）是面向 Crypto 市场周期的资产配置、策略交易与 XP 收益权重平台。当前完成 Phase 1–4；Phase 4 仅生成 Paper Reward entitlement，没有真实奖励分发或提现。
 
 ## Phase 1 已实现
 

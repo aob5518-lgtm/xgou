@@ -231,6 +231,7 @@ export interface PaperPerpFill {
   readonly notional: string;
   readonly fee: string;
   readonly slippageBps: string;
+  readonly sourcePrice: string;
 }
 
 export interface PaperPerpExecutionConfig {
@@ -256,7 +257,7 @@ export class PaperPerpExchangeAdapter {
     const calculatedQuantity = amount.div(fillPrice);
     const quantity = reduceQuantity === undefined ? calculatedQuantity : Decimal.min(calculatedQuantity, reduceQuantity);
     const executedNotional = quantity.mul(fillPrice);
-    return { action, quantity: quantity.toFixed(), price: fillPrice.toFixed(), notional: executedNotional.toFixed(), fee: executedNotional.mul(this.config.takerFeeBps).div(10_000).toFixed(), slippageBps: slippageBps.toFixed() };
+    return { action, quantity: quantity.toFixed(), price: fillPrice.toFixed(), notional: executedNotional.toFixed(), fee: executedNotional.mul(this.config.takerFeeBps).div(10_000).toFixed(), slippageBps: slippageBps.toFixed(), sourcePrice: mark.toFixed() };
   }
 }
 

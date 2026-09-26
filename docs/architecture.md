@@ -71,9 +71,27 @@ flowchart LR
 - 所有分配保存生效的 System Config version，以便审计、重放与争议处理。
 - XP 规则保持 Phase 1 原样；有效入金完成分配后才生成 Participation 与 Principal XP。
 
+## Phase 4 paper reward boundary
+
+```mermaid
+flowchart LR
+  S[Spot cumulative realized accounting] --> C[Settlement cursor delta]
+  F[Futures cumulative realized accounting] --> C
+  C --> L[Loss carryforward]
+  L --> H[Independent Reward HWM]
+  H --> P[Paper Reward Pool]
+  X[Frozen XP snapshot] --> A[Decimal allocations]
+  P --> A
+  A --> R[Admin review]
+  R --> Z[Finalized Paper Entitlement]
+  Z -. no token transfer .-> N[No real withdrawal / no chain write]
+```
+
+Reward settlement 与 Ledger 本金、Deposit 和未实现盈亏分离。只有 finalized epoch 推进 settlement cursors 和 fund state；自动计算停在 REVIEW。
+
 ## Planned boundaries
 
-Phase 2B 增加 Arc Chain Registry、finality adapter 和 Vault contracts。Phase 3 增加隔离的 Spot/Futures Paper accounts、risk engine 和 execution adapters。Phase 4 增加 NAV、High Water Mark、Loss Carryforward、Reward Pool 和提现费。未完成模块不会用占位接口伪装成可用功能。
+Phase 2B 增加 Arc Chain Registry、finality adapter 和 Vault contracts；Phase 3 增加隔离的 Spot/Futures Paper accounts、risk engine 和 execution adapters；Phase 4 已实现 Paper Reward HWM、Loss Carryforward、冻结 XP allocation 与审核流程。真实 Reward Vault/分发/提现仍未实现。
 # Phase 3B futures paper pipeline
 
 ```text

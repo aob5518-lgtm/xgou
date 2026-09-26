@@ -78,6 +78,7 @@ export const SYSTEM_CONFIG_DEFAULTS = {
   futuresTrailingAtrMultiple: '2',
   futuresMinLiquidityUsd: '1000000',
   futuresMaxVolatility: '0.12',
+  rewardRiskReserveRate: '0',
 } as const;
 
 const nonNegativeDecimalString = z.string().regex(/^\d+(?:\.\d+)?$/);
@@ -140,6 +141,7 @@ export const systemConfigSchema = z
     futuresTrailingAtrMultiple: nonNegativeDecimalString,
     futuresMinLiquidityUsd: nonNegativeDecimalString,
     futuresMaxVolatility: ratioString,
+    rewardRiskReserveRate: ratioString,
   })
   .superRefine((config, context) => {
     const total = new Decimal(config.bullAllocation)

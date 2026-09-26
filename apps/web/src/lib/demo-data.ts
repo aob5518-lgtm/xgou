@@ -62,6 +62,9 @@ export const demoData = {
   },
   rewards: {
     available: 382.41, pending: 124.82, totalEarned: 2864.2, totalWithdrawn: 2356.97, nextSettlement: '04D 12H',
+    mode: 'PAPER', epoch: 2960, epochStatus: 'FINALIZED', spotNetRealized: 920.4, futuresNetRealized: 441.2,
+    lossCarryforward: 0, highWaterMark: 18421.6, rewardPool: 1361.6, userXp: 128450, globalXp: 100039720,
+    shareRatio: 0.001284, grossReward: 382.41, feePreview: 19.12, netPreview: 363.29,
     history: [
       { label: 'W1', value: 288 }, { label: 'W2', value: 314 }, { label: 'W3', value: 301 },
       { label: 'W4', value: 348 }, { label: 'W5', value: 365 }, { label: 'W6', value: 382.41 },

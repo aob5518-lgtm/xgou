@@ -250,6 +250,26 @@ enum StrategyActivityType {
   SYSTEM
 }
 
+enum RewardMode {
+  PAPER
+  REAL
+}
+
+enum RewardEpochStatus {
+  OPEN
+  CALCULATING
+  REVIEW
+  FINALIZED
+  CANCELLED
+}
+
+enum UserRewardStatus {
+  PENDING
+  AVAILABLE
+  WITHDRAWN
+  CANCELLED
+}
+
 model User {
   id                  String             @id @default(uuid()) @db.Uuid
   walletAddress       String             @unique @db.VarChar(42)
@@ -271,6 +291,7 @@ model User {
   deposits            Deposit[]
   ledgerAccounts      LedgerAccount[]
   chainAccounts       ChainAccount[]
+  rewardAllocations   UserRewardAllocation[]
 }
 
 model AuthNonce {
@@ -349,12 +370,52 @@ model PrincipalXpEntry {
 }
 
 model RewardEpoch {
-  id        String       @id @default(uuid()) @db.Uuid
-  number    Int          @unique
-  startsAt  DateTime
-  endsAt    DateTime
-  createdAt DateTime     @default(now())
-  snapshots XpSnapshot[]
+  id                        String            @id @default(uuid()) @db.Uuid
+  number                    Int
+  startsAt                  DateTime
+  endsAt                    DateTime
+  status                    RewardEpochStatus @default(OPEN)
+  mode                      RewardMode        @default(PAPER)
+  configVersion             Int               @default(1)
+  spotStartNav              Decimal           @default(0) @db.Decimal(36, 18)
+  spotEndNav                Decimal           @default(0) @db.Decimal(36, 18)
+  spotRealizedGross         Decimal           @default(0) @db.Decimal(36, 18)
+  spotFees                  Decimal           @default(0) @db.Decimal(36, 18)
+  spotSlippage              Decimal           @default(0) @db.Decimal(36, 18)
+  spotNetRealized           Decimal           @default(0) @db.Decimal(36, 18)
+  futuresStartNav           Decimal           @default(0) @db.Decimal(36, 18)
+  futuresEndNav             Decimal           @default(0) @db.Decimal(36, 18)
+  futuresRealizedGross      Decimal           @default(0) @db.Decimal(36, 18)
+  futuresFunding            Decimal           @default(0) @db.Decimal(36, 18)
+  futuresFees               Decimal           @default(0) @db.Decimal(36, 18)
+  futuresLiquidationPenalty Decimal           @default(0) @db.Decimal(36, 18)
+  futuresSlippage           Decimal           @default(0) @db.Decimal(36, 18)
+  futuresNetRealized        Decimal           @default(0) @db.Decimal(36, 18)
+  grossNetRealized          Decimal           @default(0) @db.Decimal(36, 18)
+  lossCarryforwardBefore    Decimal           @default(0) @db.Decimal(36, 18)
+  lossCarryforwardApplied   Decimal           @default(0) @db.Decimal(36, 18)
+  lossCarryforwardAfter     Decimal           @default(0) @db.Decimal(36, 18)
+  hwmBefore                 Decimal           @default(0) @db.Decimal(36, 18)
+  hwmAfter                  Decimal           @default(0) @db.Decimal(36, 18)
+  distributableProfit       Decimal           @default(0) @db.Decimal(36, 18)
+  riskReserve               Decimal           @default(0) @db.Decimal(36, 18)
+  rewardPool                Decimal           @default(0) @db.Decimal(36, 18)
+  totalEffectiveXp          Decimal           @default(0) @db.Decimal(36, 18)
+  rewardDust                Decimal           @default(0) @db.Decimal(36, 18)
+  error                     String?            @db.VarChar(1024)
+  settledAt                 DateTime?
+  finalizedAt               DateTime?
+  createdAt                 DateTime           @default(now())
+  config                    SystemConfigVersion @relation(fields: [configVersion], references: [version], onDelete: Restrict)
+  snapshots                 XpSnapshot[]
+  sourceSnapshots           SettlementSourceSnapshot[]
+  allocations               UserRewardAllocation[]
+  auditEvents               RewardAuditEvent[]
+  finalizedFundState        RewardFundState?   @relation("LastFinalizedRewardEpoch")
+
+  @@unique([mode, number])
+  @@unique([mode, startsAt])
+  @@index([status, endsAt])
 }
 
 model XpSnapshot {
@@ -384,6 +445,7 @@ model SystemConfigVersion {
   createdAt       DateTime         @default(now())
   fundAllocations FundAllocation[]
   deposits        Deposit[]
+  rewardEpochs    RewardEpoch[]
 
   @@index([effectiveAt])
 }
@@ -745,6 +807,10 @@ model StrategyAccount {
   fundingPnl        Decimal               @default(0) @db.Decimal(36, 18)
   fees              Decimal               @default(0) @db.Decimal(36, 18)
   consecutiveLosses Int                   @default(0)
+  grossRealizedPnl  Decimal               @default(0) @db.Decimal(36, 18)
+  netRealizedPnl    Decimal               @default(0) @db.Decimal(36, 18)
+  slippageCost      Decimal               @default(0) @db.Decimal(36, 18)
+  liquidationPenalty Decimal              @default(0) @db.Decimal(36, 18)
   updatedAt         DateTime              @updatedAt
   strategy          Strategy              @relation(fields: [strategyId], references: [id], onDelete: Restrict)
   allocations       StrategyAllocation[]
@@ -930,6 +996,8 @@ model PaperExecution {
   grossNotional Decimal    @db.Decimal(36, 18)
   fee           Decimal    @db.Decimal(36, 18)
   slippageBps   Decimal    @db.Decimal(18, 8)
+  sourcePrice   Decimal?   @db.Decimal(36, 18)
+  slippageCost  Decimal    @default(0) @db.Decimal(36, 18)
   executedAt    DateTime   @default(now())
   order         PaperOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
@@ -1075,4 +1143,96 @@ model StrategyShare {
   createdAt   DateTime @default(now())
 
   @@index([strategyId])
+}
+
+model RewardFundState {
+  id                          String       @id @default(uuid()) @db.Uuid
+  mode                        RewardMode   @unique
+  aggregateSettlementNav      Decimal      @default(0) @db.Decimal(36, 18)
+  highWaterMark               Decimal      @default(0) @db.Decimal(36, 18)
+  lossCarryforward            Decimal      @default(0) @db.Decimal(36, 18)
+  cumulativeNetRealized       Decimal      @default(0) @db.Decimal(36, 18)
+  cumulativeDistributedProfit Decimal      @default(0) @db.Decimal(36, 18)
+  lastEpochNumber             Int          @default(0)
+  lastFinalizedEpochId        String?      @unique @db.Uuid
+  updatedAt                   DateTime     @updatedAt
+  lastFinalizedEpoch          RewardEpoch? @relation("LastFinalizedRewardEpoch", fields: [lastFinalizedEpochId], references: [id], onDelete: Restrict)
+}
+
+model RewardSettlementCursor {
+  id                 String     @id @default(uuid()) @db.Uuid
+  mode               RewardMode @default(PAPER)
+  strategyCode       String     @db.VarChar(64)
+  realizedPnl        Decimal    @default(0) @db.Decimal(36, 18)
+  grossRealizedPnl   Decimal    @default(0) @db.Decimal(36, 18)
+  fees               Decimal    @default(0) @db.Decimal(36, 18)
+  fundingPnl         Decimal    @default(0) @db.Decimal(36, 18)
+  slippageCost       Decimal    @default(0) @db.Decimal(36, 18)
+  liquidationPenalty Decimal   @default(0) @db.Decimal(36, 18)
+  nav                Decimal    @default(0) @db.Decimal(36, 18)
+  updatedAt          DateTime   @updatedAt
+
+  @@unique([mode, strategyCode])
+}
+
+model SettlementSourceSnapshot {
+  id                 String      @id @default(uuid()) @db.Uuid
+  rewardEpochId      String      @db.Uuid
+  strategyCode       String      @db.VarChar(64)
+  startNav           Decimal     @db.Decimal(36, 18)
+  endNav             Decimal     @db.Decimal(36, 18)
+  grossRealizedPnl   Decimal     @db.Decimal(36, 18)
+  tradingFees        Decimal     @db.Decimal(36, 18)
+  fundingPnl         Decimal     @db.Decimal(36, 18)
+  slippageCost       Decimal     @db.Decimal(36, 18)
+  liquidationPenalty Decimal     @db.Decimal(36, 18)
+  netRealizedPnl     Decimal     @db.Decimal(36, 18)
+  cumulativeRealizedPnl Decimal  @db.Decimal(36, 18)
+  cumulativeGrossRealizedPnl Decimal @db.Decimal(36, 18)
+  cumulativeFees Decimal         @db.Decimal(36, 18)
+  cumulativeFundingPnl Decimal   @db.Decimal(36, 18)
+  cumulativeSlippageCost Decimal @db.Decimal(36, 18)
+  cumulativeLiquidationPenalty Decimal @db.Decimal(36, 18)
+  frozenAt           DateTime    @default(now())
+  rewardEpoch        RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+
+  @@unique([rewardEpochId, strategyCode])
+}
+
+model UserRewardAllocation {
+  id            String           @id @default(uuid()) @db.Uuid
+  rewardEpochId String           @db.Uuid
+  userId        String           @db.Uuid
+  principalXp   Decimal          @db.Decimal(36, 18)
+  dynamicXp     Decimal          @db.Decimal(36, 18)
+  totalXp       Decimal          @db.Decimal(36, 18)
+  globalTotalXp Decimal          @db.Decimal(36, 18)
+  shareRatio    Decimal          @db.Decimal(36, 18)
+  grossReward   Decimal          @db.Decimal(36, 18)
+  feeRate       Decimal          @db.Decimal(18, 8)
+  withdrawalFee Decimal          @db.Decimal(36, 18)
+  netReward     Decimal          @db.Decimal(36, 18)
+  status        UserRewardStatus @default(PENDING)
+  mode          RewardMode       @default(PAPER)
+  createdAt     DateTime         @default(now())
+  availableAt   DateTime?
+  withdrawnAt   DateTime?
+  rewardEpoch   RewardEpoch      @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([rewardEpochId, userId])
+  @@index([userId, status])
+}
+
+model RewardAuditEvent {
+  id            String      @id @default(uuid()) @db.Uuid
+  rewardEpochId String      @db.Uuid
+  type          String      @db.VarChar(64)
+  actorId       String?     @db.Uuid
+  details       Json
+  createdAt     DateTime    @default(now())
+  rewardEpoch   RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+
+  @@index([rewardEpochId, createdAt])
+  @@unique([rewardEpochId, type])
 }

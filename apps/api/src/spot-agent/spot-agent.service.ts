@@ -201,11 +201,15 @@ export class SpotAgentService {
         ...(remaining.isZero() ? { stopLoss: null, takeProfit: null, trailingStop: null, lots: { updateMany: { where: { closedAt: null }, data: { closedAt: new Date() } } } } : {}),
       },
     });
+    const slippageCost = new Decimal(fill.price).minus(fill.sourcePrice).abs().mul(fill.quantity);
+    const fees = new Decimal(account.fees).plus(fill.fee);
+    const cumulativeSlippage = new Decimal(account.slippageCost).plus(slippageCost);
+    const netRealized = new Decimal(accounting.account.realizedPnl);
     await this.prisma.db.$transaction([
       this.prisma.db.paperOrder.update({ where: { id: order.id }, data: { status: 'FILLED', quantity: fill.quantity, notional: fill.notional } }),
-      this.prisma.db.paperExecution.create({ data: { orderId: order.id, fillPrice: fill.price, quantity: fill.quantity, grossNotional: fill.notional, fee: fill.fee, slippageBps: new Decimal(fill.slippage).mul(10_000).toString(), executedAt: new Date(fill.timestamp) } }),
+      this.prisma.db.paperExecution.create({ data: { orderId: order.id, fillPrice: fill.price, sourcePrice: fill.sourcePrice, quantity: fill.quantity, grossNotional: fill.notional, fee: fill.fee, slippageBps: new Decimal(fill.slippage).mul(10_000).toString(), slippageCost: slippageCost.toString(), executedAt: new Date(fill.timestamp) } }),
       positionWrite,
-      this.prisma.db.strategyAccount.update({ where: { id: accountId }, data: { cashBalance: accounting.account.cashBalance, realizedPnl: accounting.account.realizedPnl } }),
+      this.prisma.db.strategyAccount.update({ where: { id: accountId }, data: { cashBalance: accounting.account.cashBalance, realizedPnl: netRealized.toString(), netRealizedPnl: netRealized.toString(), fees: fees.toString(), slippageCost: cumulativeSlippage.toString(), grossRealizedPnl: netRealized.plus(fees).plus(cumulativeSlippage).toString() } }),
       this.prisma.db.tradeProposal.update({ where: { id: proposalId }, data: { status: 'EXECUTED' } }),
     ]);
     await this.activity(strategyId, 'EXECUTION', 'Spot Agent', `${side} ${fill.quantity} ${symbol} @ ${fill.price}`, 'PAPER FILLED');

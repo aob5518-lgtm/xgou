@@ -73,7 +73,21 @@ export class ApiXgouDataProvider implements XgouDataProvider {
       },
     } as unknown as DemoData['agent'];
   }
-  getRewards() { return this.get<DemoData['rewards']>('/rewards'); }
+  async getRewards() {
+    const response = await this.get<Record<string, unknown>>('/rewards');
+    const epoch = response.latestFinalizedEpoch as Record<string, unknown> | null;
+    const allocations = Array.isArray(response.allocations) ? response.allocations as Array<Record<string, unknown>> : [];
+    const mine = allocations[0];
+    return {
+      ...demoData.rewards,
+      available: Number(response.availablePaperReward ?? 0), pending: Number(response.pendingPaperReward ?? 0), totalEarned: Number(response.totalPaperEarned ?? 0), totalWithdrawn: 0,
+      mode: 'PAPER', epoch: Number(epoch?.number ?? 0), epochStatus: typeof epoch?.status === 'string' ? epoch.status : 'OPEN',
+      spotNetRealized: Number(epoch?.spotNetRealized ?? 0), futuresNetRealized: Number(epoch?.futuresNetRealized ?? 0), lossCarryforward: Number(epoch?.lossCarryforwardAfter ?? 0),
+      highWaterMark: Number(epoch?.hwmAfter ?? 0), rewardPool: Number(epoch?.rewardPool ?? 0), userXp: Number(mine?.xp ?? 0), globalXp: Number(mine?.globalXp ?? 0),
+      shareRatio: Number(mine?.shareRatio ?? 0), grossReward: Number(mine?.grossReward ?? 0), feePreview: Number(mine?.feePreview ?? 0), netPreview: Number(mine?.netPreview ?? 0),
+      history: [],
+    } as unknown as DemoData['rewards'];
+  }
   getXp() { return this.get<DemoData['xp']>('/xp/me'); }
   getActivities() { return this.get<DemoData['activities']>('/activities'); }
   getReferralTree() { return this.get<DemoData['referralLevels']>('/referrals/tree'); }

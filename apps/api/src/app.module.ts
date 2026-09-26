@@ -13,6 +13,7 @@ import { ChainModule } from './chain/chain.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { SpotAgentModule } from './spot-agent/spot-agent.module.js';
 import { FuturesAgentModule } from './futures-agent/futures-agent.module.js';
+import { RewardsModule } from './rewards/rewards.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { FuturesAgentModule } from './futures-agent/futures-agent.module.js';
     DashboardModule,
     SpotAgentModule,
     FuturesAgentModule,
+    RewardsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

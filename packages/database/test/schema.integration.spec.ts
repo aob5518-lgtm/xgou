@@ -18,6 +18,10 @@ const futuresMigrationPath = new URL(
   '../prisma/migrations/20260926120000_phase3b_futures_paper_trading/migration.sql',
   import.meta.url,
 );
+const rewardMigrationPath = new URL(
+  '../prisma/migrations/20260927120000_phase4_paper_reward_settlement/migration.sql',
+  import.meta.url,
+);
 
 describe('Phase 1 database artifacts', () => {
   it('stores asset and XP amounts as Decimal and defines the referral closure identity', async () => {
@@ -95,5 +99,25 @@ describe('Phase 3A paper runtime persistence', () => {
     expect(schema).toContain('weeklyBaselineAt');
     expect(schema).toContain('markedAt');
     expect(schema).toContain('@@unique([strategyId, cycleId])');
+  });
+});
+
+describe('Phase 4 paper reward settlement persistence', () => {
+  it('stores frozen source, XP and user allocation records with unique epoch identities', async () => {
+    const [schema, migration] = await Promise.all([readFile(schemaPath, 'utf8'), readFile(rewardMigrationPath, 'utf8')]);
+    for (const model of ['RewardFundState', 'RewardSettlementCursor', 'SettlementSourceSnapshot', 'UserRewardAllocation', 'RewardAuditEvent']) {
+      expect(schema).toContain(`model ${model}`);
+      expect(migration).toContain(`CREATE TABLE "${model}"`);
+    }
+    expect(schema).toContain('@@unique([rewardEpochId, userId])');
+    expect(schema).toContain('@@unique([mode, strategyCode])');
+  });
+
+  it('protects finalized epoch inputs and allocations from mutation', async () => {
+    const migration = await readFile(rewardMigrationPath, 'utf8');
+    expect(migration).toContain('RewardEpoch_finalized_immutable');
+    expect(migration).toContain('SettlementSourceSnapshot_finalized_immutable');
+    expect(migration).toContain('UserRewardAllocation_finalized_immutable');
+    expect(migration).toContain('XpSnapshot_finalized_immutable');
   });
 });

@@ -3,5 +3,5 @@ import { AuthModule } from '../auth/auth.module.js';
 import { XpController } from './xp.controller.js';
 import { XpService } from './xp.service.js';
 
-@Module({ imports: [AuthModule], controllers: [XpController], providers: [XpService] })
+@Module({ imports: [AuthModule], controllers: [XpController], providers: [XpService], exports: [XpService] })
 export class XpModule {}

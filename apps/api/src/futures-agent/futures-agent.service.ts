@@ -163,13 +163,16 @@ export class FuturesAgentService {
     const order = await this.prisma.db.paperOrder.create({ data: { proposalId, riskDecisionId, cycleId, symbol, side: orderSide, status: 'RISK_APPROVED', quantity: fill.quantity, notional: fill.notional, referencePrice: price, leverage, reduceOnly: !action.startsWith('OPEN_') } });
     const realized = new Decimal(account.realizedPnl).plus(accounting.realizedPnlDelta);
     const fees = new Decimal(account.fees).plus(fill.fee);
+    const slippageCost = new Decimal(fill.price).minus(fill.sourcePrice).abs().mul(fill.quantity);
+    const cumulativeSlippage = new Decimal(account.slippageCost).plus(slippageCost);
+    const netRealized = realized.plus(account.fundingPnl);
     const cash = new Decimal(account.cashBalance).plus(accounting.realizedPnlDelta);
     const margin = Decimal.max(0, new Decimal(account.marginUsed).plus(accounting.marginDelta));
     await this.prisma.db.$transaction([
       this.prisma.db.paperOrder.update({ where: { id: order.id }, data: { status: 'FILLED' } }),
-      this.prisma.db.paperExecution.create({ data: { orderId: order.id, fillPrice: fill.price, quantity: fill.quantity, grossNotional: fill.notional, fee: fill.fee, slippageBps: fill.slippageBps } }),
+      this.prisma.db.paperExecution.create({ data: { orderId: order.id, fillPrice: fill.price, sourcePrice: fill.sourcePrice, quantity: fill.quantity, grossNotional: fill.notional, fee: fill.fee, slippageBps: fill.slippageBps, slippageCost: slippageCost.toString() } }),
       this.prisma.db.tradeProposal.update({ where: { id: proposalId }, data: { status: 'EXECUTED' } }),
-      this.prisma.db.strategyAccount.update({ where: { id: accountId }, data: { realizedPnl: realized.toString(), fees: fees.toString(), cashBalance: cash.toString(), marginUsed: margin.toString(), availableMargin: Decimal.max(0, cash.minus(margin)).toString(), consecutiveLosses: accounting.loss ? { increment: 1 } : accounting.realizedPnlDelta !== '0' ? 0 : account.consecutiveLosses } }),
+      this.prisma.db.strategyAccount.update({ where: { id: accountId }, data: { realizedPnl: realized.toString(), netRealizedPnl: netRealized.toString(), grossRealizedPnl: realized.plus(fees).plus(cumulativeSlippage).plus(account.liquidationPenalty).toString(), fees: fees.toString(), slippageCost: cumulativeSlippage.toString(), cashBalance: cash.toString(), marginUsed: margin.toString(), availableMargin: Decimal.max(0, cash.minus(margin)).toString(), consecutiveLosses: accounting.loss ? { increment: 1 } : accounting.realizedPnlDelta !== '0' ? 0 : account.consecutiveLosses } }),
     ]);
     if (accounting.position) {
       const marked = markPerpPosition(accounting.position, fill.price, config.futuresMaintenanceMarginRatio, new Decimal(config.futuresLiquidationPenaltyBps).div(10_000));
@@ -200,7 +203,7 @@ export class FuturesAgentService {
         await this.prisma.db.$transaction([
           this.prisma.db.fundingPayment.create({ data: { positionId: position.id, idempotencyKey, fundingRate: funding.value, notional: marked.notional, payment, fundedAt: new Date(now) } }),
           this.prisma.db.futuresPosition.update({ where: { id: position.id }, data: { fundingPnl: { increment: payment } } }),
-          this.prisma.db.strategyAccount.update({ where: { id: account.id }, data: { fundingPnl: { increment: payment }, cashBalance: { increment: payment } } }),
+          this.prisma.db.strategyAccount.update({ where: { id: account.id }, data: { fundingPnl: { increment: payment }, netRealizedPnl: { increment: payment }, cashBalance: { increment: payment } } }),
         ]);
         await this.activity(strategyId, 'EXECUTION', 'Funding Engine', `${position.symbol} funding payment ${payment} USDC`, 'PAPER FUNDING');
       }
@@ -216,7 +219,7 @@ export class FuturesAgentService {
     await this.prisma.db.$transaction([
       this.prisma.db.futuresPosition.update({ where: { id: position.id }, data: { status: 'LIQUIDATED', markPrice, unrealizedPnl: 0, realizedPnl: { increment: realized.toString() }, quantity: 0, notional: 0, initialMargin: 0, closedAt: new Date(), markedAt: new Date() } }),
       this.prisma.db.futuresLiquidation.create({ data: { positionId: position.id, cycleId: `${cycleId}:${position.symbol}`, liquidationPrice: position.liquidationPrice, fillPrice: markPrice, penalty: penalty.toString(), realizedLoss: realized.abs().toString() } }),
-      this.prisma.db.strategyAccount.update({ where: { id: accountId }, data: { realizedPnl: { increment: realized.toString() }, cashBalance: { increment: realized.toString() }, marginUsed: { decrement: position.initialMargin }, consecutiveLosses: { increment: 1 } } }),
+      this.prisma.db.strategyAccount.update({ where: { id: accountId }, data: { realizedPnl: { increment: realized.toString() }, netRealizedPnl: { increment: realized.toString() }, grossRealizedPnl: { increment: pnl.toString() }, liquidationPenalty: { increment: penalty.toString() }, cashBalance: { increment: realized.toString() }, marginUsed: { decrement: position.initialMargin }, consecutiveLosses: { increment: 1 } } }),
       this.prisma.db.riskEvent.create({ data: { strategyId, severity: 'CRITICAL', code: 'PAPER_LIQUIDATION', message: `${position.symbol} paper position liquidated`, details: { cycleId, markPrice, penalty: penalty.toString(), mode: 'PAPER' } } }),
       this.prisma.db.circuitBreakerState.upsert({ where: { strategyId }, create: { strategyId, status: 'RISK_OFF', reason: 'PAPER_LIQUIDATION', triggeredAt: new Date() }, update: { status: 'RISK_OFF', reason: 'PAPER_LIQUIDATION', triggeredAt: new Date() } }),
     ]);
