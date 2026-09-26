@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { RewardSettlementService } from './reward-settlement.service.js';
 
 const originalMode = process.env.REWARD_MODE;
@@ -26,5 +27,11 @@ describe('paper reward safety gates', () => {
     process.env.REWARD_MODE = 'PAPER';
     process.env.REAL_REWARD_DISTRIBUTION_ENABLED = 'false';
     expect(() => { service.assertSafety(); }).not.toThrow();
+  });
+
+  it('binds the XP snapshot and its audit record to the epoch config version', async () => {
+    const source = await readFile(new URL('./reward-settlement.service.ts', import.meta.url), 'utf8');
+    expect(source).toContain('this.xp.summaryAt(user.id, epoch.endsAt, epoch.configVersion)');
+    expect(source).toContain('configVersion: epoch.configVersion');
   });
 });

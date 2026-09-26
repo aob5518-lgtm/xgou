@@ -32,3 +32,9 @@ XP 以 Epoch 结束时间为排他边界（`effectiveAt < endsAt`）重建。
 ReferralClosure、direct referral qualification participation 和 descendant Principal XP
 都必须在同一边界前存在。Dynamic XP 仍为解锁层级内 descendant Principal XP 的 1%，
 解锁深度仍为 `min(validDirects * 3, 30)`，且不递归计入 Dynamic XP。
+
+历史 Epoch 的 XP 重建同时固定 `RewardEpoch.configVersion`。结算调用
+`summaryAt(userId, endsAt, configVersion)`，通过 `SystemConfigService.byVersion()` 读取当时的
+`dynamicXpPercent`、`maxReferralDepth`、`minReferralQualification` 及其他 XP 配置。
+已经写入的 `PrincipalXpEntry` 始终是 Principal XP source of truth，不会用 `xpPerDollar`
+重新换算。`XP_SNAPSHOTTED` 审计事件同时记录 `asOf` 与 `configVersion`。

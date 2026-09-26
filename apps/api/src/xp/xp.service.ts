@@ -25,9 +25,12 @@ export class XpService {
     return this.summaryAt(userId, new Date());
   }
 
-  async summaryAt(userId: string, asOf: Date): Promise<XpSummary> {
+  async summaryAt(userId: string, asOf: Date, configVersion?: number): Promise<XpSummary> {
     if (Number.isNaN(asOf.getTime())) throw new Error('XP as-of timestamp is invalid');
-    const config = (await this.configs.current()).values;
+    const configRecord = configVersion === undefined
+      ? await this.configs.current()
+      : await this.configs.byVersion(configVersion);
+    const config = configRecord.values;
     const [ownAggregate, ownParticipations, directEdges, closure] = await Promise.all([
       this.prisma.db.principalXpEntry.aggregate({
         where: { userId, participation: { status: 'EFFECTIVE', effectiveAt: { lt: asOf } } },

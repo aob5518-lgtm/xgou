@@ -66,7 +66,7 @@ export class RewardSettlementService implements OnModuleInit {
       }, config.values.rewardRiskReserveRate);
       const xpRows = [];
       for (const user of users) {
-        const summary = await this.xp.summaryAt(user.id, epoch.endsAt);
+        const summary = await this.xp.summaryAt(user.id, epoch.endsAt, epoch.configVersion);
         xpRows.push({ userId: user.id, principalXp: summary.principalXp, dynamicXp: summary.dynamicXp, totalXp: summary.totalXp, directReferralCount: summary.directValidReferralCount, unlockedDepth: summary.unlockedDepth, networkPrincipalXp: summary.networkPrincipalXp });
       }
       let calculationError: string | null = null;
@@ -90,7 +90,7 @@ export class RewardSettlementService implements OnModuleInit {
         } }),
         this.prisma.db.rewardAuditEvent.createMany({ data: [
           { rewardEpochId: epochId, type: 'INPUT_FROZEN', actorId, details: { mode: 'PAPER' } },
-          { rewardEpochId: epochId, type: 'XP_SNAPSHOTTED', actorId, details: { mode: 'PAPER', asOf: epoch.endsAt.toISOString(), totalEffectiveXp: allocation.totalEffectiveXp } },
+          { rewardEpochId: epochId, type: 'XP_SNAPSHOTTED', actorId, details: { mode: 'PAPER', asOf: epoch.endsAt.toISOString(), configVersion: epoch.configVersion, totalEffectiveXp: allocation.totalEffectiveXp } },
           { rewardEpochId: epochId, type: 'ALLOCATIONS_GENERATED', actorId, details: { mode: 'PAPER', allocationSum: allocation.allocationSum, dust: allocation.dust } },
         ] }),
       ]);
