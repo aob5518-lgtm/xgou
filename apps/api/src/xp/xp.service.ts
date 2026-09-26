@@ -22,19 +22,27 @@ export class XpService {
   ) {}
 
   async summary(userId: string): Promise<XpSummary> {
+    return this.summaryAt(userId, new Date());
+  }
+
+  async summaryAt(userId: string, asOf: Date): Promise<XpSummary> {
+    if (Number.isNaN(asOf.getTime())) throw new Error('XP as-of timestamp is invalid');
     const config = (await this.configs.current()).values;
     const [ownAggregate, ownParticipations, directEdges, closure] = await Promise.all([
-      this.prisma.db.principalXpEntry.aggregate({ where: { userId }, _sum: { amount: true } }),
+      this.prisma.db.principalXpEntry.aggregate({
+        where: { userId, participation: { status: 'EFFECTIVE', effectiveAt: { lt: asOf } } },
+        _sum: { amount: true },
+      }),
       this.prisma.db.participation.findMany({
-        where: { userId, status: 'EFFECTIVE' },
+        where: { userId, status: 'EFFECTIVE', effectiveAt: { lt: asOf } },
         select: { amount: true },
       }),
       this.prisma.db.referralEdge.findMany({
-        where: { inviterUserId: userId },
-        include: { user: { include: { participations: { where: { status: 'EFFECTIVE' }, select: { amount: true } } } } },
+        where: { inviterUserId: userId, createdAt: { lt: asOf } },
+        include: { user: { include: { participations: { where: { status: 'EFFECTIVE', effectiveAt: { lt: asOf } }, select: { amount: true } } } } },
       }),
       this.prisma.db.referralClosure.findMany({
-        where: { ancestorId: userId, depth: { gte: 1, lte: config.maxReferralDepth } },
+        where: { ancestorId: userId, depth: { gte: 1, lte: config.maxReferralDepth }, createdAt: { lt: asOf } },
         select: { descendantId: true, depth: true },
       }),
     ]);
@@ -55,7 +63,7 @@ export class XpService {
       ? []
       : await this.prisma.db.principalXpEntry.groupBy({
           by: ['userId'],
-          where: { userId: { in: descendantIds } },
+          where: { userId: { in: descendantIds }, participation: { status: 'EFFECTIVE', effectiveAt: { lt: asOf } } },
           _sum: { amount: true },
         });
     const xpByUser = new Map(descendantXp.map((row) => [row.userId, row._sum.amount?.toString() ?? '0']));

@@ -22,6 +22,10 @@ const rewardMigrationPath = new URL(
   '../prisma/migrations/20260927120000_phase4_paper_reward_settlement/migration.sql',
   import.meta.url,
 );
+const rewardFinalizeMigrationPath = new URL(
+  '../prisma/migrations/20260928120000_finalize_reward_epoch_accounting/migration.sql',
+  import.meta.url,
+);
 
 describe('Phase 1 database artifacts', () => {
   it('stores asset and XP amounts as Decimal and defines the referral closure identity', async () => {
@@ -119,5 +123,13 @@ describe('Phase 4 paper reward settlement persistence', () => {
     expect(migration).toContain('SettlementSourceSnapshot_finalized_immutable');
     expect(migration).toContain('UserRewardAllocation_finalized_immutable');
     expect(migration).toContain('XpSnapshot_finalized_immutable');
+  });
+
+  it('stores an immutable start baseline for every epoch strategy source', async () => {
+    const [schema, migration] = await Promise.all([readFile(schemaPath, 'utf8'), readFile(rewardFinalizeMigrationPath, 'utf8')]);
+    expect(schema).toContain('model EpochSettlementBaseline');
+    expect(schema).toContain('@@unique([rewardEpochId, strategyCode])');
+    expect(migration).toContain('EpochSettlementBaseline_rewardEpochId_strategyCode_key');
+    expect(migration).toContain('EpochSettlementBaseline_immutable');
   });
 });

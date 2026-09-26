@@ -408,6 +408,7 @@ model RewardEpoch {
   createdAt                 DateTime           @default(now())
   config                    SystemConfigVersion @relation(fields: [configVersion], references: [version], onDelete: Restrict)
   snapshots                 XpSnapshot[]
+  settlementBaselines       EpochSettlementBaseline[]
   sourceSnapshots           SettlementSourceSnapshot[]
   allocations               UserRewardAllocation[]
   auditEvents               RewardAuditEvent[]
@@ -1173,6 +1174,24 @@ model RewardSettlementCursor {
   updatedAt          DateTime   @updatedAt
 
   @@unique([mode, strategyCode])
+}
+
+model EpochSettlementBaseline {
+  id                     String      @id @default(uuid()) @db.Uuid
+  rewardEpochId          String      @db.Uuid
+  strategyCode           String      @db.VarChar(64)
+  nav                    Decimal     @db.Decimal(36, 18)
+  realizedPnl            Decimal     @db.Decimal(36, 18)
+  grossRealizedPnl       Decimal     @db.Decimal(36, 18)
+  fees                   Decimal     @db.Decimal(36, 18)
+  fundingPnl             Decimal     @db.Decimal(36, 18)
+  slippageCost           Decimal     @db.Decimal(36, 18)
+  liquidationPenalty     Decimal     @db.Decimal(36, 18)
+  capturedAt             DateTime    @default(now())
+  rewardEpoch            RewardEpoch @relation(fields: [rewardEpochId], references: [id], onDelete: Restrict)
+
+  @@unique([rewardEpochId, strategyCode])
+  @@index([strategyCode, capturedAt])
 }
 
 model SettlementSourceSnapshot {

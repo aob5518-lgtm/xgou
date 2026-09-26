@@ -1,8 +1,21 @@
+import Decimal from 'decimal.js';
+
 export interface ChartPoint { readonly label: string; readonly value: number }
 export interface FundSummary { readonly name: string; readonly allocation: number; readonly nav: number; readonly returnPercent: number; readonly tone: 'red' | 'cyan' | 'blue' }
 export interface ActivityItem { readonly time: string; readonly agent: string; readonly message: string; readonly status?: string }
 export interface Position { readonly symbol: string; readonly entry: number; readonly current: number; readonly pnlPercent: number; readonly allocation: number }
 export interface FuturesPosition { readonly symbol: string; readonly side: 'LONG' | 'SHORT'; readonly quantity: number; readonly entry: number; readonly mark: number; readonly leverage: number; readonly notional: number; readonly margin: number; readonly unrealizedPnl: number; readonly stop: number; readonly liquidationPrice: number; readonly liquidationDistance: number }
+
+const demoRewardInputs = {
+  rewardPool: new Decimal('1361.60'),
+  userXp: new Decimal('128450'),
+  globalXp: new Decimal('100039720'),
+  feeRate: new Decimal('0.05'),
+};
+const demoRewardShare = demoRewardInputs.userXp.div(demoRewardInputs.globalXp);
+const demoGrossReward = demoRewardInputs.rewardPool.mul(demoRewardShare);
+const demoFeePreview = demoGrossReward.mul(demoRewardInputs.feeRate);
+const demoNetPreview = demoGrossReward.minus(demoFeePreview);
 
 export const demoData = {
   dashboard: {
@@ -61,13 +74,13 @@ export const demoData = {
     ],
   },
   rewards: {
-    available: 382.41, pending: 124.82, totalEarned: 2864.2, totalWithdrawn: 2356.97, nextSettlement: '04D 12H',
+    available: demoGrossReward.toNumber(), pending: 124.82, totalEarned: 2864.2, totalWithdrawn: 2356.97, nextSettlement: '04D 12H',
     mode: 'PAPER', epoch: 2960, epochStatus: 'FINALIZED', spotNetRealized: 920.4, futuresNetRealized: 441.2,
-    lossCarryforward: 0, highWaterMark: 18421.6, rewardPool: 1361.6, userXp: 128450, globalXp: 100039720,
-    shareRatio: 0.001284, grossReward: 382.41, feePreview: 19.12, netPreview: 363.29,
+    lossCarryforward: 0, highWaterMark: 18421.6, rewardPool: demoRewardInputs.rewardPool.toNumber(), userXp: demoRewardInputs.userXp.toNumber(), globalXp: demoRewardInputs.globalXp.toNumber(),
+    shareRatio: demoRewardShare.toNumber(), grossReward: demoGrossReward.toNumber(), feePreview: demoFeePreview.toNumber(), netPreview: demoNetPreview.toNumber(),
     history: [
       { label: 'W1', value: 288 }, { label: 'W2', value: 314 }, { label: 'W3', value: 301 },
-      { label: 'W4', value: 348 }, { label: 'W5', value: 365 }, { label: 'W6', value: 382.41 },
+      { label: 'W4', value: 348 }, { label: 'W5', value: 365 }, { label: 'W6', value: demoGrossReward.toNumber() },
     ] satisfies readonly ChartPoint[],
   },
   xp: {

@@ -6,6 +6,9 @@ import { PrismaService } from '../database/prisma.service.js';
 import { SystemConfigService } from '../config/system-config.service.js';
 import { XpService } from '../xp/xp.service.js';
 import { StrategyAccountSettlementSource } from './settlement-source.js';
+import type { Prisma } from '@xgou/database';
+
+const REWARD_STRATEGIES = ['SPOT_SWING_V1', 'FUTURES_TREND_V1'] as const;
 
 @Injectable()
 export class RewardSettlementService implements OnModuleInit {
@@ -21,12 +24,23 @@ export class RewardSettlementService implements OnModuleInit {
   async ensureCurrentEpoch(now = this.clock.now()) {
     const bounds = utcWeekBounds(now);
     const config = await this.configs.current();
-    const epoch = await this.prisma.db.rewardEpoch.upsert({
-      where: { mode_startsAt: { mode: 'PAPER', startsAt: bounds.startsAt } },
-      create: { number: bounds.number, startsAt: bounds.startsAt, endsAt: bounds.endsAt, mode: 'PAPER', configVersion: config.version || 1 }, update: {},
-    });
-    await this.prisma.db.rewardAuditEvent.createMany({ data: [{ rewardEpochId: epoch.id, type: 'EPOCH_CREATED', details: { mode: 'PAPER', number: epoch.number } }], skipDuplicates: true });
-    return epoch;
+    const identity = { mode_startsAt: { mode: 'PAPER' as const, startsAt: bounds.startsAt } };
+    const existing = await this.prisma.db.rewardEpoch.findUnique({ where: identity });
+    if (existing) return existing;
+    try {
+      return await this.prisma.db.$transaction(async (tx) => {
+        const concurrent = await tx.rewardEpoch.findUnique({ where: identity });
+        if (concurrent) return concurrent;
+        const epoch = await tx.rewardEpoch.create({ data: { number: bounds.number, startsAt: bounds.startsAt, endsAt: bounds.endsAt, mode: 'PAPER', configVersion: config.version || 1 } });
+        const baselines = await Promise.all(REWARD_STRATEGIES.map((strategyCode) => this.captureBaseline(tx, strategyCode)));
+        await tx.epochSettlementBaseline.createMany({ data: baselines.map((baseline) => ({ rewardEpochId: epoch.id, ...baseline })) });
+        await tx.rewardAuditEvent.create({ data: { rewardEpochId: epoch.id, type: 'EPOCH_CREATED', details: { mode: 'PAPER', number: epoch.number, baselines: REWARD_STRATEGIES } } });
+        return epoch;
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'P2002' && (error as { code?: string }).code !== 'P2034') throw error;
+      return this.prisma.db.rewardEpoch.findUniqueOrThrow({ where: identity });
+    }
   }
 
   async calculate(epochId: string, actorId: string | null = null) {
@@ -41,8 +55,8 @@ export class RewardSettlementService implements OnModuleInit {
     try {
       const source = new StrategyAccountSettlementSource(this.prisma);
       const [spot, futures, state, config, users] = await Promise.all([
-        source.getEpochMetrics('SPOT_SWING_V1', epoch.startsAt, epoch.endsAt),
-        source.getEpochMetrics('FUTURES_TREND_V1', epoch.startsAt, epoch.endsAt),
+        source.getEpochMetrics(epoch.id, 'SPOT_SWING_V1', epoch.startsAt, epoch.endsAt),
+        source.getEpochMetrics(epoch.id, 'FUTURES_TREND_V1', epoch.startsAt, epoch.endsAt),
         this.prisma.db.rewardFundState.upsert({ where: { mode: 'PAPER' }, create: { mode: 'PAPER' }, update: {} }),
         this.configs.byVersion(epoch.configVersion), this.prisma.db.user.findMany({ select: { id: true }, orderBy: { id: 'asc' } }),
       ]);
@@ -52,7 +66,7 @@ export class RewardSettlementService implements OnModuleInit {
       }, config.values.rewardRiskReserveRate);
       const xpRows = [];
       for (const user of users) {
-        const summary = await this.xp.summary(user.id);
+        const summary = await this.xp.summaryAt(user.id, epoch.endsAt);
         xpRows.push({ userId: user.id, principalXp: summary.principalXp, dynamicXp: summary.dynamicXp, totalXp: summary.totalXp, directReferralCount: summary.directValidReferralCount, unlockedDepth: summary.unlockedDepth, networkPrincipalXp: summary.networkPrincipalXp });
       }
       let calculationError: string | null = null;
@@ -66,7 +80,7 @@ export class RewardSettlementService implements OnModuleInit {
       const now = this.clock.now();
       await this.prisma.db.$transaction([
         this.prisma.db.settlementSourceSnapshot.createMany({ data: [this.sourceData(epochId, spot), this.sourceData(epochId, futures)] }),
-        this.prisma.db.xpSnapshot.createMany({ data: xpRows.map((row) => ({ ...row, rewardEpochId: epochId, snapshotAt: now })) }),
+        this.prisma.db.xpSnapshot.createMany({ data: xpRows.map((row) => ({ ...row, rewardEpochId: epochId, snapshotAt: epoch.endsAt })) }),
         this.prisma.db.userRewardAllocation.createMany({ data: allocation.allocations.map((row) => ({ ...row, rewardEpochId: epochId, mode: 'PAPER', status: 'PENDING' })) }),
         this.prisma.db.rewardEpoch.update({ where: { id: epochId }, data: {
           status: 'REVIEW', spotStartNav: spot.startNav, spotEndNav: spot.endNav, spotRealizedGross: spot.grossRealizedPnl, spotFees: spot.tradingFees, spotSlippage: spot.slippageCost, spotNetRealized: spot.netRealizedPnl,
@@ -76,7 +90,7 @@ export class RewardSettlementService implements OnModuleInit {
         } }),
         this.prisma.db.rewardAuditEvent.createMany({ data: [
           { rewardEpochId: epochId, type: 'INPUT_FROZEN', actorId, details: { mode: 'PAPER' } },
-          { rewardEpochId: epochId, type: 'XP_SNAPSHOTTED', actorId, details: { mode: 'PAPER', totalEffectiveXp: allocation.totalEffectiveXp } },
+          { rewardEpochId: epochId, type: 'XP_SNAPSHOTTED', actorId, details: { mode: 'PAPER', asOf: epoch.endsAt.toISOString(), totalEffectiveXp: allocation.totalEffectiveXp } },
           { rewardEpochId: epochId, type: 'ALLOCATIONS_GENERATED', actorId, details: { mode: 'PAPER', allocationSum: allocation.allocationSum, dust: allocation.dust } },
         ] }),
       ]);
@@ -159,6 +173,19 @@ export class RewardSettlementService implements OnModuleInit {
   async endedEpochs() {
     await this.ensureCurrentEpoch();
     return this.prisma.db.rewardEpoch.findMany({ where: { mode: 'PAPER', status: 'OPEN', endsAt: { lte: this.clock.now() } }, orderBy: { number: 'asc' } });
+  }
+
+  private async captureBaseline(tx: Prisma.TransactionClient, strategyCode: string) {
+    const strategy = await tx.strategy.findUnique({ where: { code: strategyCode }, include: { account: true } });
+    const account = strategy?.account;
+    const realized = new Decimal(account?.realizedPnl ?? 0);
+    const fees = new Decimal(account?.fees ?? 0);
+    const funding = new Decimal(account?.fundingPnl ?? 0);
+    const slippage = new Decimal(account?.slippageCost ?? 0);
+    const penalty = new Decimal(account?.liquidationPenalty ?? 0);
+    const explicitGross = new Decimal(account?.grossRealizedPnl ?? 0);
+    const gross = explicitGross.isZero() && !realized.isZero() ? realized.minus(funding).plus(fees).plus(slippage).plus(penalty) : explicitGross;
+    return { strategyCode, nav: new Decimal(account?.nav ?? 0).toFixed(), realizedPnl: realized.toFixed(), grossRealizedPnl: gross.toFixed(), fees: fees.toFixed(), fundingPnl: funding.toFixed(), slippageCost: slippage.toFixed(), liquidationPenalty: penalty.toFixed() };
   }
 
   private sourceData(rewardEpochId: string, source: Awaited<ReturnType<StrategyAccountSettlementSource['getEpochMetrics']>>) { return { rewardEpochId, ...source }; }
