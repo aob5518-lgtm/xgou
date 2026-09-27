@@ -4,6 +4,7 @@ import { Decimal } from 'decimal.js';
 import { ArcChainAdapter } from '../chain/arc-chain.adapter.js';
 import { DeploymentRegistryService } from '../chain/deployment-registry.service.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { PersistentOperationalRiskService } from '../operations/persistent-operational-risk.service.js';
 
 interface ReconciliationResult {
   readonly fundDomain: 'BULL' | 'SPOT' | 'FUTURES';
@@ -23,6 +24,7 @@ export class ReconciliationService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly adapter: ArcChainAdapter,
     private readonly deployments: DeploymentRegistryService,
+    private readonly operationalRisk: PersistentOperationalRiskService,
   ) {}
 
   onModuleInit(): void {
@@ -119,6 +121,9 @@ export class ReconciliationService implements OnModuleInit, OnModuleDestroy {
           criticalCount,
         },
       });
+      if (criticalCount > 0) {
+        await this.operationalRisk.criticalReconciliation(`Reconciliation run ${run.id} detected ${String(criticalCount)} critical difference(s)`);
+      }
       return results;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'unknown reconciliation error';

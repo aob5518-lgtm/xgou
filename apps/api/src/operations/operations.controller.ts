@@ -10,10 +10,11 @@ import { OperationsService, type ApiGlobalState } from './operations.service.js'
 export class OperationsController {
   constructor(private readonly operations: OperationsService) {}
   private authorize(user: AuthenticatedUser): void { if (!['ADMIN', 'RISK_MANAGER'].includes(user.role)) throw new ForbiddenException('admin or risk manager role required'); }
-  private transition(state: ApiGlobalState, user: AuthenticatedUser, request: Request) { this.authorize(user); return this.operations.transition(state, user.userId, String(request.headers['x-request-id'] ?? crypto.randomUUID())); }
+  private transition(state: ApiGlobalState, user: AuthenticatedUser, request: Request, manual = false) { this.authorize(user); return this.operations.transition(state, user.userId, String(request.headers['x-request-id'] ?? crypto.randomUUID()), manual); }
   @Get('production-readiness') readiness(@CurrentUser() user: AuthenticatedUser) { this.authorize(user); return this.operations.productionReadiness(); }
+  @Get('global-state') globalState(@CurrentUser() user: AuthenticatedUser) { this.authorize(user); return this.operations.globalState(); }
   @Post('global/pause') pause(@CurrentUser() user: AuthenticatedUser, @Req() request: Request) { return this.transition('PAUSED', user, request); }
   @Post('global/reduce-only') reduce(@CurrentUser() user: AuthenticatedUser, @Req() request: Request) { return this.transition('REDUCE_ONLY', user, request); }
   @Post('global/emergency-stop') stop(@CurrentUser() user: AuthenticatedUser, @Req() request: Request) { return this.transition('EMERGENCY_STOP', user, request); }
-  @Post('global/resume') resume(@CurrentUser() user: AuthenticatedUser, @Req() request: Request) { return this.transition('ACTIVE', user, request); }
+  @Post('global/resume') resume(@CurrentUser() user: AuthenticatedUser, @Req() request: Request) { return this.transition('ACTIVE', user, request, true); }
 }

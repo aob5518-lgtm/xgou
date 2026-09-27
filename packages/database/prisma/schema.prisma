@@ -982,6 +982,8 @@ model TradeProposal {
   signal            TradeSignal    @relation(fields: [signalId], references: [id], onDelete: Restrict)
   riskDecision      RiskDecision?
   paperOrder        PaperOrder?
+  executionAuthorizations ExecutionAuthorization[]
+  dryRunExecutions  DryRunExecution[]
 
   @@index([strategyId, createdAt])
 }
@@ -997,6 +999,8 @@ model RiskDecision {
   createdAt         DateTime         @default(now())
   proposal          TradeProposal    @relation(fields: [proposalId], references: [id], onDelete: Restrict)
   paperOrder        PaperOrder?
+  executionAuthorizations ExecutionAuthorization[]
+  dryRunExecutions  DryRunExecution[]
 }
 
 model PaperOrder {
@@ -1361,6 +1365,7 @@ model ExchangeCredentialProfile {
   permissions         String[]
   environment         ProductionEnvironment
   status              PolicyStatus          @default(ACTIVE)
+  expiresAt           DateTime?
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
@@ -1419,8 +1424,12 @@ model ExecutionAuthorization {
   globalTradingState GlobalTradingState
   authorizedBy       String                @db.VarChar(128)
   referencePrice     Decimal               @db.Decimal(36, 18)
+  maxPriceDeviationBps Decimal              @db.Decimal(18, 8)
   expiresAt          DateTime
   createdAt          DateTime              @default(now())
+  proposal           TradeProposal         @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  riskDecision       RiskDecision          @relation(fields: [riskDecisionId], references: [id], onDelete: Restrict)
+  executions         DryRunExecution[]
 
   @@index([proposalId, expiresAt])
 }
@@ -1428,6 +1437,8 @@ model ExecutionAuthorization {
 model DryRunExecution {
   id                  String         @id @default(uuid()) @db.Uuid
   proposalId          String         @db.Uuid
+  riskDecisionId      String         @db.Uuid
+  authorizationId     String         @db.Uuid
   clientOrderId       String         @unique @db.VarChar(128)
   exchange            String         @db.VarChar(64)
   symbol              String         @db.VarChar(64)
@@ -1442,9 +1453,45 @@ model DryRunExecution {
   policyDecision      Json
   riskDecision        Json
   state               ExecutionState @default(ACKNOWLEDGED)
+  networkSent         Boolean        @default(false)
+  fillCount           Int            @default(0)
+  recoveryCount       Int            @default(0)
+  recoveredAt         DateTime?
   createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  proposal            TradeProposal  @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  riskDecisionRecord  RiskDecision   @relation(fields: [riskDecisionId], references: [id], onDelete: Restrict)
+  authorization       ExecutionAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Restrict)
 
   @@index([state, createdAt])
+  @@index([authorizationId])
+}
+
+model GlobalTradingControl {
+  id                   String             @id @db.VarChar(32)
+  state                GlobalTradingState @default(ACTIVE)
+  reason               String             @db.VarChar(512)
+  manualResumeRequired Boolean            @default(false)
+  triggeredBy          String?            @db.VarChar(128)
+  triggeredAt          DateTime?
+  updatedAt            DateTime           @updatedAt
+  version              Int                @default(1)
+}
+
+model ProductionReadinessEvidence {
+  id                String                @id @default(uuid()) @db.Uuid
+  control           String                @db.VarChar(128)
+  status            String                @db.VarChar(16)
+  evidenceReference String                @db.VarChar(512)
+  verifiedBy        String                @db.VarChar(128)
+  verifiedAt        DateTime
+  expiresAt         DateTime?
+  environment       ProductionEnvironment
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@unique([control, environment])
+  @@index([environment, status, verifiedAt])
 }
 
 model TreasuryTransferRequest {

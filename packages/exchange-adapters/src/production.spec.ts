@@ -43,10 +43,10 @@ describe('Phase 5 dry-run execution safety', () => {
     const states = new InMemoryGlobalTradingStateStore();
     const alerts = new MemoryAlertSink();
     await new OperationalRiskController(states, alerts).critical('RECONCILIATION_MISMATCH', 'critical drift');
-    expect(states.get()).toBe('EMERGENCY_STOP');
-    expect(() => { states.set('ACTIVE', false); }).toThrow('manual resume');
+    expect(await states.get()).toBe('EMERGENCY_STOP');
+    await expect(states.set('ACTIVE', false)).rejects.toThrow('manual resume');
     const reduce = mapper.map({ ...spot, proposalId: 'reduce', side: 'REDUCE_LONG', reduceOnly: true });
-    expect(checkPreTradeRisk({ now: new Date('2026-09-28T00:00:10Z'), authorization: auth, order: reduce, freshPrice: '60000', availableBalance: '10000', currentExposure: '1000', maxExposure: '10000', globalState: states.get(), exchangeHealth: 'HEALTHY', marketDataHealthy: true, credentialHealthy: true, unknownOrders: 0, maxUnknownOrders: 3 }).approved).toBe(true);
+    expect(checkPreTradeRisk({ now: new Date('2026-09-28T00:00:10Z'), authorization: auth, order: reduce, freshPrice: '60000', availableBalance: '10000', currentExposure: '1000', maxExposure: '10000', globalState: await states.get(), exchangeHealth: 'HEALTHY', marketDataHealthy: true, credentialHealthy: true, unknownOrders: 0, maxUnknownOrders: 3 }).approved).toBe(true);
   });
   it('recovers an UNKNOWN order by clientOrderId exactly once without resubmit', async () => {
     const order = { clientOrderId: 'xgou:spot:c1:p1', state: 'UNKNOWN' as const, fills: 0 };

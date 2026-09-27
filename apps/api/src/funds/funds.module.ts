@@ -6,9 +6,10 @@ import { ChainModule } from '../chain/chain.module.js';
 import { DepositIndexer } from './deposit-indexer.service.js';
 import { DepositSafetyService } from './deposit-safety.service.js';
 import { ReconciliationService } from './reconciliation.service.js';
+import { OperationsModule } from '../operations/operations.module.js';
 
 @Module({
-  imports: [AuthModule, ChainModule],
+  imports: [AuthModule, ChainModule, OperationsModule],
   controllers: [DepositController],
   providers: [DepositService, DepositIndexer, DepositSafetyService, ReconciliationService],
   exports: [DepositService, DepositIndexer, ReconciliationService],

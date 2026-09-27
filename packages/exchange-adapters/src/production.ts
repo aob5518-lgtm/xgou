@@ -109,6 +109,18 @@ export const checkPreTradeRisk = (input: PreTradeRiskInput): RiskCheckResult => 
   return { approved: reasons.length === 0, reasons };
 };
 
+export interface GlobalTradingStateStore {
+  get(): Promise<GlobalTradingState>;
+  set(state: GlobalTradingState, manual: boolean, reason?: string, triggeredBy?: string): Promise<void>;
+}
+
+export class ExecutionPolicyService {
+  constructor(private readonly states: GlobalTradingStateStore) {}
+  async check(input: Omit<PreTradeRiskInput, 'globalState'>): Promise<RiskCheckResult> {
+    return checkPreTradeRisk({ ...input, globalState: await this.states.get() });
+  }
+}
+
 export interface DryRunExecution {
   readonly exchange: string;
   readonly order: SerializedOrder;
@@ -181,22 +193,22 @@ export class ExecutionAnomalyDetector {
   }
 }
 
-export interface GlobalTradingStateStore { get(): GlobalTradingState; set(state: GlobalTradingState, manual: boolean): void; }
 export class InMemoryGlobalTradingStateStore implements GlobalTradingStateStore {
   private state: GlobalTradingState = 'ACTIVE';
   private emergency = false;
-  get(): GlobalTradingState { return this.state; }
-  set(state: GlobalTradingState, manual: boolean): void {
-    if (this.emergency && state === 'ACTIVE' && !manual) throw new Error('EMERGENCY_STOP requires manual resume');
+  get(): Promise<GlobalTradingState> { return Promise.resolve(this.state); }
+  set(state: GlobalTradingState, manual: boolean): Promise<void> {
+    if (this.emergency && state === 'ACTIVE' && !manual) return Promise.reject(new Error('EMERGENCY_STOP requires manual resume'));
     this.state = state;
     this.emergency = state === 'EMERGENCY_STOP';
+    return Promise.resolve();
   }
 }
 
 export class OperationalRiskController {
   constructor(private readonly states: GlobalTradingStateStore, private readonly alerts: AlertSink) {}
   async critical(type: string, summary: string): Promise<void> {
-    this.states.set('EMERGENCY_STOP', false);
+    await this.states.set('EMERGENCY_STOP', false, summary, 'operational-risk-controller');
     await this.alerts.emit({ type, severity: 'EMERGENCY', summary, createdAt: new Date() });
   }
 }

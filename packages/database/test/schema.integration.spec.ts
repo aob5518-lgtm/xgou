@@ -30,6 +30,10 @@ const phase5MigrationPath = new URL(
   '../prisma/migrations/20260929120000_phase5_production_hardening/migration.sql',
   import.meta.url,
 );
+const phase5FinalizeMigrationPath = new URL(
+  '../prisma/migrations/20260930120000_persist_production_control_plane/migration.sql',
+  import.meta.url,
+);
 
 describe('Phase 1 database artifacts', () => {
   it('stores asset and XP amounts as Decimal and defines the referral closure identity', async () => {
@@ -155,5 +159,18 @@ describe('Phase 5 production hardening persistence', () => {
     expect(migration).toContain('DryRunExecution_clientOrderId_key');
     expect(migration).toContain('Approval_approvalRequestId_approverId_key');
     expect(migration).toContain('AddressAllowlist_chainId_address_key');
+  });
+
+  it('persists the global control plane, readiness evidence and execution recovery links', async () => {
+    const [schema, migration] = await Promise.all([readFile(schemaPath, 'utf8'), readFile(phase5FinalizeMigrationPath, 'utf8')]);
+    for (const model of ['GlobalTradingControl', 'ProductionReadinessEvidence']) {
+      expect(schema).toContain(`model ${model}`);
+      expect(migration).toContain(`CREATE TABLE "${model}"`);
+    }
+    expect(migration).toContain("VALUES ('GLOBAL', 'ACTIVE'");
+    expect(migration).toContain('DryRunExecution_authorizationId_fkey');
+    expect(migration).toContain('GlobalTradingControl_singleton_check');
+    expect(schema).toContain('manualResumeRequired');
+    expect(schema).toContain('recoveryCount');
   });
 });
