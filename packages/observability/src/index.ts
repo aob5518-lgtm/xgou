@@ -3,6 +3,9 @@ export const METRICS = [
   'xgou_risk_rejections', 'xgou_kill_switch_state', 'xgou_reconciliation_difference',
   'xgou_market_data_staleness', 'xgou_exchange_health', 'xgou_key_provider_health',
   'xgou_reward_settlement_failures',
+  'xgou_binance_testnet_requests', 'xgou_binance_testnet_orders', 'xgou_binance_testnet_order_errors',
+  'xgou_binance_testnet_unknown_orders', 'xgou_binance_clock_drift_ms', 'xgou_binance_used_weight',
+  'xgou_binance_reconciliation_mismatch', 'xgou_binance_ws_disconnects',
 ] as const;
 export type MetricName = typeof METRICS[number];
 

@@ -1612,3 +1612,235 @@ model CredentialRotationPolicy {
 
   @@unique([credentialProfileId])
 }
+
+/// Phase 6 Binance testnet transport switch. Rows default disabled and are
+/// activated only after the referenced ApprovalRequest has been approved.
+model SandboxTransportControl {
+  id                String                @id @db.VarChar(64)
+  exchange          String                @db.VarChar(32)
+  environment       ProductionEnvironment @default(TESTNET)
+  enabled           Boolean               @default(false)
+  approvalRequestId String?               @db.Uuid
+  enabledBy         String?               @db.VarChar(128)
+  enabledAt         DateTime?
+  disabledReason    String?               @db.VarChar(512)
+  version           Int                   @default(1)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@unique([exchange, environment])
+}
+
+model SandboxStrategyAccount {
+  id                  String   @id @default(uuid()) @db.Uuid
+  strategyCode        String   @db.VarChar(64)
+  exchange            String   @db.VarChar(32)
+  accountType         String   @db.VarChar(16)
+  credentialProfileId String   @db.Uuid
+  quoteAsset          String   @db.VarChar(16)
+  status              String   @default("ACTIVE") @db.VarChar(32)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([strategyCode, exchange, accountType])
+  @@index([credentialProfileId, status])
+}
+
+model SandboxOrder {
+  id                    String         @id @default(uuid()) @db.Uuid
+  proposalId            String         @db.Uuid
+  riskDecisionId        String         @db.Uuid
+  authorizationId       String         @db.Uuid
+  strategyAccountId     String?        @db.Uuid
+  internalClientOrderId String         @unique @db.VarChar(128)
+  exchangeClientOrderId String         @unique @db.VarChar(36)
+  exchangeOrderId       String?        @db.VarChar(128)
+  exchange              String         @default("BINANCE") @db.VarChar(32)
+  environment           ProductionEnvironment @default(TESTNET)
+  accountType           String         @db.VarChar(16)
+  symbol                 String         @db.VarChar(32)
+  side                   String         @db.VarChar(16)
+  type                   String         @db.VarChar(32)
+  quantity               Decimal        @db.Decimal(36, 18)
+  quoteQuantity          Decimal?       @db.Decimal(36, 18)
+  price                  Decimal?       @db.Decimal(36, 18)
+  stopPrice              Decimal?       @db.Decimal(36, 18)
+  reduceOnly             Boolean        @default(false)
+  leverage               Int?
+  state                  ExecutionState @default(AUTHORIZED)
+  networkSent            Boolean        @default(false)
+  unknownReason          String?        @db.VarChar(512)
+  recoveryCount          Int            @default(0)
+  lastQueriedAt          DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  fills                  SandboxFill[]
+  protectiveOrders       ProtectiveOrder[]
+  ledgerEntries          SandboxExecutionLedger[]
+
+  @@index([state, createdAt])
+  @@index([proposalId, riskDecisionId, authorizationId])
+  @@index([exchangeOrderId])
+}
+
+model SandboxExecutionLedger {
+  id          String       @id @default(uuid()) @db.Uuid
+  orderId     String       @db.Uuid
+  eventType   String       @db.VarChar(64)
+  stateBefore String?      @db.VarChar(32)
+  stateAfter  String       @db.VarChar(32)
+  details     Json
+  occurredAt  DateTime     @default(now())
+  order       SandboxOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, eventType, occurredAt])
+  @@index([orderId, occurredAt])
+}
+
+model SandboxFill {
+  id              String       @id @default(uuid()) @db.Uuid
+  orderId         String       @db.Uuid
+  exchangeTradeId String       @db.VarChar(128)
+  quantity        Decimal      @db.Decimal(36, 18)
+  price           Decimal      @db.Decimal(36, 18)
+  quoteQuantity   Decimal      @db.Decimal(36, 18)
+  commission      Decimal      @db.Decimal(36, 18)
+  commissionAsset String       @db.VarChar(16)
+  executedAt      DateTime
+  raw             Json
+  createdAt       DateTime     @default(now())
+  order           SandboxOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, exchangeTradeId])
+  @@index([executedAt])
+}
+
+model SandboxSpotPosition {
+  id                String   @id @default(uuid()) @db.Uuid
+  strategyAccountId String   @db.Uuid
+  symbol            String   @db.VarChar(32)
+  quantity          Decimal  @db.Decimal(36, 18)
+  averagePrice      Decimal  @db.Decimal(36, 18)
+  realizedPnl       Decimal  @default(0) @db.Decimal(36, 18)
+  updatedAt         DateTime @updatedAt
+
+  @@unique([strategyAccountId, symbol])
+}
+
+model SandboxFuturesPosition {
+  id                String   @id @default(uuid()) @db.Uuid
+  strategyAccountId String   @db.Uuid
+  symbol            String   @db.VarChar(32)
+  positionSide      String   @default("BOTH") @db.VarChar(16)
+  quantity          Decimal  @db.Decimal(36, 18)
+  entryPrice        Decimal  @db.Decimal(36, 18)
+  markPrice         Decimal  @db.Decimal(36, 18)
+  leverage          Int
+  marginType        String   @db.VarChar(16)
+  unrealizedPnl     Decimal  @default(0) @db.Decimal(36, 18)
+  liquidationPrice  Decimal? @db.Decimal(36, 18)
+  updatedAt         DateTime @updatedAt
+
+  @@unique([strategyAccountId, symbol, positionSide])
+}
+
+model ProtectiveOrder {
+  id                    String         @id @default(uuid()) @db.Uuid
+  orderId               String         @db.Uuid
+  exchangeClientOrderId String         @unique @db.VarChar(36)
+  exchangeOrderId       String?        @db.VarChar(128)
+  type                  String         @db.VarChar(32)
+  stopPrice             Decimal        @db.Decimal(36, 18)
+  reduceOnly            Boolean        @default(true)
+  state                 ExecutionState @default(AUTHORIZED)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  order                 SandboxOrder   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, state])
+}
+
+model SandboxFundingRecord {
+  id                String   @id @default(uuid()) @db.Uuid
+  strategyAccountId String   @db.Uuid
+  exchangeIncomeId  String   @unique @db.VarChar(128)
+  symbol            String?  @db.VarChar(32)
+  incomeType        String   @db.VarChar(32)
+  asset             String   @db.VarChar(16)
+  amount            Decimal  @db.Decimal(36, 18)
+  occurredAt        DateTime
+  raw               Json
+  createdAt         DateTime @default(now())
+
+  @@index([strategyAccountId, occurredAt])
+}
+
+model ExchangeAccountSnapshot {
+  id                String   @id @default(uuid()) @db.Uuid
+  strategyAccountId String   @db.Uuid
+  exchange          String   @db.VarChar(32)
+  accountType       String   @db.VarChar(16)
+  balances          Json
+  capturedAt        DateTime @default(now())
+
+  @@index([strategyAccountId, capturedAt])
+}
+
+model ExchangePositionSnapshot {
+  id                String   @id @default(uuid()) @db.Uuid
+  strategyAccountId String   @db.Uuid
+  positions         Json
+  capturedAt        DateTime @default(now())
+
+  @@index([strategyAccountId, capturedAt])
+}
+
+model ExchangeOrderSnapshot {
+  id                String   @id @default(uuid()) @db.Uuid
+  strategyAccountId String   @db.Uuid
+  orders            Json
+  capturedAt        DateTime @default(now())
+
+  @@index([strategyAccountId, capturedAt])
+}
+
+model SandboxReconciliationRun {
+  id             String                  @id @default(uuid()) @db.Uuid
+  exchange       String                  @default("BINANCE") @db.VarChar(32)
+  accountType    String                  @db.VarChar(16)
+  status         ReconciliationRunStatus @default(RUNNING)
+  startedAt      DateTime                @default(now())
+  finishedAt     DateTime?
+  criticalCount  Int                     @default(0)
+  error          String?                 @db.VarChar(1024)
+  differences    SandboxReconciliationDifference[]
+
+  @@index([status, startedAt])
+}
+
+model SandboxReconciliationDifference {
+  id          String                 @id @default(uuid()) @db.Uuid
+  runId       String                 @db.Uuid
+  category    String                 @db.VarChar(32)
+  referenceId String                 @db.VarChar(128)
+  internal    Json
+  external    Json
+  severity    ReconciliationSeverity
+  status      ReconciliationStatus   @default(OPEN)
+  createdAt   DateTime               @default(now())
+  run         SandboxReconciliationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@index([runId, severity])
+}
+
+model SandboxRecoveryCursor {
+  id            String   @id @db.VarChar(64)
+  exchange      String   @db.VarChar(32)
+  accountType   String   @db.VarChar(16)
+  lastTradeTime DateTime?
+  lastIncomeTime DateTime?
+  lastOrderTime DateTime?
+  updatedAt     DateTime @updatedAt
+
+  @@unique([exchange, accountType])
+}

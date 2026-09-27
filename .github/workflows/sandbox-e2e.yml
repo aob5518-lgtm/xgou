@@ -1,0 +1,43 @@
+name: Binance Sandbox E2E
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: binance-sandbox-e2e
+  cancel-in-progress: false
+
+jobs:
+  sandbox-e2e:
+    if: github.ref == 'refs/heads/main' && github.repository == 'aob5518-lgtm/xgou'
+    runs-on: ubuntu-latest
+    environment: binance-testnet
+    permissions:
+      contents: read
+    env:
+      CI: true
+      RUN_BINANCE_SANDBOX_E2E: "true"
+      EXECUTION_MODE: SANDBOX
+      BINANCE_ENVIRONMENT: TESTNET
+      SANDBOX_EXCHANGE_TRANSPORT_ENABLED: "true"
+      LIVE_EXCHANGE_TRANSPORT_ENABLED: "false"
+      MAINNET_ENABLED: "false"
+      REAL_TRADING_ENABLED: "false"
+      REAL_WITHDRAWALS_ENABLED: "false"
+      REAL_REWARD_DISTRIBUTION_ENABLED: "false"
+      BINANCE_SPOT_TESTNET_API_KEY: ${{ secrets.BINANCE_SPOT_TESTNET_API_KEY }}
+      BINANCE_SPOT_TESTNET_API_SECRET: ${{ secrets.BINANCE_SPOT_TESTNET_API_SECRET }}
+      BINANCE_FUTURES_TESTNET_API_KEY: ${{ secrets.BINANCE_FUTURES_TESTNET_API_KEY }}
+      BINANCE_FUTURES_TESTNET_API_SECRET: ${{ secrets.BINANCE_FUTURES_TESTNET_API_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @xgou/exchange-adapters typecheck
+      - run: pnpm --filter @xgou/exchange-adapters test:integration

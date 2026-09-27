@@ -34,6 +34,10 @@ const phase5FinalizeMigrationPath = new URL(
   '../prisma/migrations/20260930120000_persist_production_control_plane/migration.sql',
   import.meta.url,
 );
+const phase6MigrationPath = new URL(
+  '../prisma/migrations/20261001120000_phase6_binance_sandbox/migration.sql',
+  import.meta.url,
+);
 
 describe('Phase 1 database artifacts', () => {
   it('stores asset and XP amounts as Decimal and defines the referral closure identity', async () => {
@@ -172,5 +176,25 @@ describe('Phase 5 production hardening persistence', () => {
     expect(migration).toContain('GlobalTradingControl_singleton_check');
     expect(schema).toContain('manualResumeRequired');
     expect(schema).toContain('recoveryCount');
+  });
+});
+
+describe('Phase 6 Binance sandbox persistence', () => {
+  it('separates external sandbox state from paper accounting and stores no credential secret', async () => {
+    const [schema, migration] = await Promise.all([readFile(schemaPath, 'utf8'), readFile(phase6MigrationPath, 'utf8')]);
+    for (const model of ['SandboxTransportControl', 'SandboxStrategyAccount', 'SandboxOrder', 'SandboxExecutionLedger', 'SandboxFill', 'SandboxSpotPosition', 'SandboxFuturesPosition', 'ProtectiveOrder', 'SandboxFundingRecord', 'ExchangeAccountSnapshot', 'ExchangePositionSnapshot', 'ExchangeOrderSnapshot', 'SandboxReconciliationRun', 'SandboxReconciliationDifference', 'SandboxRecoveryCursor']) {
+      expect(schema).toContain(`model ${model}`);
+      expect(migration).toContain(`CREATE TABLE "${model}"`);
+    }
+    expect(schema).not.toContain('apiSecret');
+    expect(migration).not.toContain('apiSecret');
+  });
+
+  it('defaults transport off and enforces both internal and exchange client-order idempotency', async () => {
+    const migration = await readFile(phase6MigrationPath, 'utf8');
+    expect(migration).toContain('"enabled" BOOLEAN NOT NULL DEFAULT false');
+    expect(migration).toContain('SandboxOrder_internalClientOrderId_key');
+    expect(migration).toContain('SandboxOrder_exchangeClientOrderId_key');
+    expect(migration).toContain('SandboxFill_orderId_exchangeTradeId_key');
   });
 });

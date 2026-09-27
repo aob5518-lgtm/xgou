@@ -39,7 +39,8 @@ export class PersistentExecutionService {
   }
 
   async authorize(input: CreateExecutionAuthorizationInput) {
-    if (input.executionMode === 'LIVE') throw new Error('Live execution is not enabled in Phase 5.');
+    if (input.executionMode === 'LIVE') throw new Error('Live execution is not enabled in Phase 6.');
+    if (input.executionMode === 'SANDBOX' && input.environment !== 'TESTNET') throw new Error('SANDBOX authorization requires TESTNET environment');
     const now = input.now ?? new Date();
     const [proposal, riskDecision, globalTradingState] = await Promise.all([
       this.prisma.db.tradeProposal.findUnique({ where: { id: input.proposalId } }),
