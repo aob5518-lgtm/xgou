@@ -90,7 +90,8 @@ describe('Binance metadata and clock', () => {
     expect(() => { assertBinanceMinNotional(metadata, '0.001', '1000'); }).toThrow('minimum notional');
   });
   it('blocks signed traffic when clock drift is unsafe', () => {
-    const clock = new BinanceClock(1_000); clock.update(Date.now() + 1_001);
+    const now = 1_790_492_295_514;
+    const clock = new BinanceClock(1_000); clock.update(now + 1_001, now);
     expect(() => { clock.assertHealthy(); }).toThrow('clock drift');
   });
 });
