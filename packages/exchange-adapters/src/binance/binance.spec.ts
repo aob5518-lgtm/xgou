@@ -166,6 +166,18 @@ describe('Binance authenticated transports', () => {
     expect(requestUrl).toContain('demo-fapi.binance.com/fapi/v1/leverage');
   });
 
+  it('attempts reduce-only close and raises a critical callback when stop protection fails', async () => {
+    const credential = await futuresCredential();
+    const adapter = new BinanceFuturesSandboxAdapter(credential, gate, vi.fn<typeof fetch>());
+    vi.spyOn(adapter, 'placeOpeningMarketOrder').mockResolvedValue({ symbol: 'BTCUSDT', orderId: 1, clientOrderId: 'open', status: 'FILLED', executedQty: '0.002' });
+    vi.spyOn(adapter, 'placeProtectiveStop').mockRejectedValue(new Error('stop failed'));
+    const close = vi.spyOn(adapter, 'closePosition').mockRejectedValue(new Error('close failed'));
+    const critical = vi.fn<(reason: string) => Promise<void>>().mockResolvedValue();
+    await expect(adapter.openWithProtection({ symbol: 'BTCUSDT', side: 'BUY', quantity: '0.002', openClientOrderId: 'open', stopClientOrderId: 'stop', emergencyCloseClientOrderId: 'close', stopPrice: '50000' }, critical)).rejects.toThrow('both failed');
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ side: 'SELL', quantity: '0.002' }));
+    expect(critical).toHaveBeenCalledWith('BINANCE_FUTURES_NAKED_POSITION_CLOSE_UNCONFIRMED');
+  });
+
   it('forbids withdrawal and transfer paths in the HTTP boundary', async () => {
     const client = new BinanceHttpClient({ environment: 'TESTNET', baseUrl: BINANCE_SPOT_TESTNET_BASE_URL, credential: await spotCredential(), fetch: vi.fn() });
     await expect(client.signed('POST', '/v3/capital/withdraw/apply', {})).rejects.toThrow('forbidden');

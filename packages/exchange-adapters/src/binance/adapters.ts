@@ -48,6 +48,22 @@ export class BinanceFuturesSandboxAdapter {
   }
   placeProtectiveStop(input: { symbol: string; side: 'BUY' | 'SELL'; stopPrice: string; clientOrderId: string }) { return this.placeOrder({ symbol: input.symbol, side: input.side, type: 'STOP_MARKET', stopPrice: input.stopPrice, closePosition: true, newClientOrderId: input.clientOrderId, workingType: 'MARK_PRICE' }); }
   closePosition(input: { symbol: string; side: 'BUY' | 'SELL'; quantity: string; clientOrderId: string }) { return this.placeOrder({ symbol: input.symbol, side: input.side, type: 'MARKET', quantity: input.quantity, reduceOnly: true, positionSide: 'BOTH', newClientOrderId: input.clientOrderId }); }
+  async openWithProtection(input: { symbol: string; side: 'BUY' | 'SELL'; quantity: string; openClientOrderId: string; stopClientOrderId: string; emergencyCloseClientOrderId: string; stopPrice: string }, onCritical: (reason: string) => Promise<void>) {
+    const open = await this.placeOpeningMarketOrder({ symbol: input.symbol, side: input.side, quantity: input.quantity, clientOrderId: input.openClientOrderId, stopPrice: input.stopPrice });
+    const closingSide = input.side === 'BUY' ? 'SELL' : 'BUY';
+    try {
+      const protectiveStop = await this.placeProtectiveStop({ symbol: input.symbol, side: closingSide, stopPrice: input.stopPrice, clientOrderId: input.stopClientOrderId });
+      return { open, protectiveStop };
+    } catch (stopError) {
+      try {
+        await this.closePosition({ symbol: input.symbol, side: closingSide, quantity: input.quantity, clientOrderId: input.emergencyCloseClientOrderId });
+      } catch (closeError) {
+        await onCritical('BINANCE_FUTURES_NAKED_POSITION_CLOSE_UNCONFIRMED');
+        throw new AggregateError([stopError, closeError], 'Protective stop and emergency reduce-only close both failed', { cause: closeError });
+      }
+      throw new Error('Protective stop failed; exposure was closed reduce-only', { cause: stopError });
+    }
+  }
   queryOrder(symbol: string, clientOrderId: string) { return this.client.signed<BinanceOrderResponse>('GET', '/fapi/v1/order', { symbol, origClientOrderId: clientOrderId }); }
   cancelOrder(symbol: string, clientOrderId: string) { return this.client.signed<BinanceOrderResponse>('DELETE', '/fapi/v1/order', { symbol, origClientOrderId: clientOrderId }); }
   openOrders(symbol?: string) { return this.client.signed<readonly BinanceOrderResponse[]>('GET', '/fapi/v1/openOrders', symbol ? { symbol } : {}); }

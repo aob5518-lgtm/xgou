@@ -1,5 +1,13 @@
 # Binance Testnet execution
 
+Documentation verified: 2026-09-27.
+
+Official references:
+
+- [Spot Testnet REST API](https://developers.binance.com/en/docs/products/spot/testnet/rest-api)
+- [USDⓈ-M Futures general information](https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/general-info)
+- [USDⓈ-M Futures trade REST API](https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/trade)
+
 Phase 6 connects XGOU only to Binance test environments. Spot uses `https://testnet.binance.vision/api`; USDⓈ-M Futures uses `https://demo-fapi.binance.com`. These hosts are pinned in code and production hosts are rejected before any request is constructed.
 
 Network order submission requires all of the following:
@@ -21,6 +29,8 @@ Every sandbox order is reserved in `SandboxOrder` before transport. `internalCli
 Prices and quantities are rounded down using live `exchangeInfo` filters. Futures uses one-way mode, isolated margin where supported, no more than 2× leverage, and requires a protective stop for any exposure-increasing order. Testnet balances are labelled `TEST FUNDS · NO REAL ASSETS`.
 
 No withdrawal or transfer endpoint exists. `LIVE_EXCHANGE_TRANSPORT_ENABLED`, `REAL_TRADING_ENABLED`, `REAL_WITHDRAWALS_ENABLED`, `REAL_REWARD_DISTRIBUTION_ENABLED`, and `MAINNET_ENABLED` stay false.
+
+Known limitations: Binance may reset test balances and history without notice. Futures Testnet may be regionally unreachable. The implementation records unexpected reset symptoms as sandbox-only reconciliation incidents and never posts their effects into principal or reward ledgers.
 
 ## Credential references
 
