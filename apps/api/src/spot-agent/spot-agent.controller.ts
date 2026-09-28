@@ -9,7 +9,7 @@ import { SpotAgentService } from './spot-agent.service.js';
 export class SpotAgentController {
   constructor(private readonly agent: SpotAgentService) {}
   @Get('agent/spot') getSpot() { return this.agent.snapshot(); }
-  @Get('activities') getActivities() { return this.agent.activities(); }
+  @Get('activities') getActivities(@CurrentUser() user: AuthenticatedUser) { return this.agent.activities(user.userId); }
   @Post('admin/agent/spot/:action')
   async change(@Param('action') action: string, @CurrentUser() user: AuthenticatedUser) {
     if (!['ADMIN', 'RISK_MANAGER'].includes(user.role)) throw new ForbiddenException('admin or risk manager role required');

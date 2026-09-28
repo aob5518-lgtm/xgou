@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BINANCE_FUTURES_TESTNET_BASE_URL, BINANCE_SPOT_TESTNET_BASE_URL, BinanceClientOrderIdCodec, assertBinanceSandboxGate } from '@xgou/exchange-adapters';
 import { PrismaService } from '../database/prisma.service.js';
 import { DatabaseGlobalTradingStateStore } from './database-global-trading-state.store.js';
+import { Decimal } from 'decimal.js';
 
 const CONTROL_ID = 'binance-testnet';
 
@@ -87,6 +88,25 @@ export class BinanceSandboxService {
     const authorization = await this.prisma.db.executionAuthorization.findUnique({ where: { id: input.authorizationId } });
     if (!authorization || authorization.executionMode !== 'SANDBOX' || authorization.environment !== 'TESTNET' || authorization.proposalId !== input.proposalId || authorization.riskDecisionId !== input.riskDecisionId || authorization.expiresAt <= new Date()) throw new Error('fresh SANDBOX/TESTNET authorization is required');
     if (input.accountType === 'FUTURES' && !input.reduceOnly && (!input.stopPrice || (input.leverage ?? 1) > 2)) throw new Error('futures sandbox opening orders require stop and leverage <=2x');
+    const now = new Date();
+    const [riskDecision, minuteOrders, hourOrders, dailyOrders] = await Promise.all([
+      this.prisma.db.riskDecision.findUnique({ where: { id: input.riskDecisionId }, select: { approvedNotional: true } }),
+      this.prisma.db.sandboxOrder.count({ where: { createdAt: { gte: new Date(now.getTime() - 60_000) } } }),
+      this.prisma.db.sandboxOrder.count({ where: { createdAt: { gte: new Date(now.getTime() - 3_600_000) } } }),
+      this.prisma.db.sandboxOrder.findMany({ where: { createdAt: { gte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())) } }, select: { riskDecisionId: true } }),
+    ]);
+    if (!riskDecision) throw new Error('sandbox risk decision not found');
+    const maxPerOrder = new Decimal(process.env.BINANCE_SANDBOX_MAX_ORDER_NOTIONAL ?? '100');
+    const maxDaily = new Decimal(process.env.BINANCE_SANDBOX_DAILY_NOTIONAL_LIMIT ?? '1000');
+    const maxPerMinute = Number(process.env.BINANCE_SANDBOX_MAX_ORDERS_PER_MINUTE ?? 5);
+    const maxPerHour = Number(process.env.BINANCE_SANDBOX_MAX_ORDERS_PER_HOUR ?? 20);
+    if (!input.reduceOnly && new Decimal(riskDecision.approvedNotional.toString()).gt(maxPerOrder)) throw new Error('sandbox per-order notional limit exceeded');
+    if (minuteOrders >= maxPerMinute || hourOrders >= maxPerHour) throw new Error('sandbox order velocity limit exceeded');
+    if (!input.reduceOnly && dailyOrders.length > 0) {
+      const decisions = await this.prisma.db.riskDecision.findMany({ where: { id: { in: dailyOrders.map((order) => order.riskDecisionId) } }, select: { approvedNotional: true } });
+      const used = decisions.reduce((sum, decision) => sum.plus(decision.approvedNotional.toString()), new Decimal(0));
+      if (used.plus(riskDecision.approvedNotional.toString()).gt(maxDaily)) throw new Error('sandbox daily notional limit exceeded');
+    }
     const internalClientOrderId = `${input.strategy}:${input.cycle}:${input.proposalId}`;
     const exchangeClientOrderId = new BinanceClientOrderIdCodec().encode({ strategy: input.strategy, cycle: input.cycle, proposalId: input.proposalId });
     const prior = await this.prisma.db.sandboxOrder.findFirst({ where: { OR: [{ internalClientOrderId }, { exchangeClientOrderId }] } });

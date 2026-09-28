@@ -10,7 +10,7 @@ const chain = getChainConfig(process.env.NEXT_PUBLIC_CHAIN_ENV);
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/v1';
 
 interface NonceResponse { readonly nonce: string; }
-interface VerifyResponse { readonly accessToken: string; }
+interface VerifyResponse { readonly accessToken: string; readonly csrfToken: string; }
 
 export function useSiweSession() {
   const { address, chainId, status } = useConnection();
@@ -67,8 +67,8 @@ export function useSiweSession() {
         body: JSON.stringify({ message, signature }),
       });
       if (!verifyResponse.ok) throw new Error('SIWE 登录验证失败');
-      const { accessToken } = await verifyResponse.json() as VerifyResponse;
-      writeSession({ accessToken, walletAddress: address });
+      const { accessToken, csrfToken } = await verifyResponse.json() as VerifyResponse;
+      writeSession({ accessToken, csrfToken, walletAddress: address });
       setSessionWallet(address.toLowerCase());
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'SIWE 登录失败';

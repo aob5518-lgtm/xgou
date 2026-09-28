@@ -4,5 +4,5 @@ import { ChainModule } from '../chain/chain.module.js';
 import { DashboardController } from './dashboard.controller.js';
 import { DashboardService } from './dashboard.service.js';
 
-@Module({ imports: [AuthModule, ChainModule], controllers: [DashboardController], providers: [DashboardService] })
+@Module({ imports: [AuthModule, ChainModule], controllers: [DashboardController], providers: [DashboardService], exports: [DashboardService] })
 export class DashboardModule {}

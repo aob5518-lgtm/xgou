@@ -61,9 +61,25 @@ export class SpotAgentService {
     };
   }
 
-  async activities() {
-    const rows = await this.prisma.db.strategyActivity.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
-    return rows.map((row) => ({ time: row.createdAt.toISOString(), agent: row.agentName, message: row.message, status: row.status, type: row.type, mode: 'PAPER' }));
+  async activities(userId: string) {
+    const [rows, deposits, principalEntries, rewards] = await Promise.all([
+      this.prisma.db.strategyActivity.findMany({ orderBy: { createdAt: 'desc' }, take: 25 }),
+      this.prisma.db.deposit.findMany({ where: { userId }, include: { allocations: true }, orderBy: { createdAt: 'desc' }, take: 15 }),
+      this.prisma.db.principalXpEntry.findMany({ where: { userId }, include: { participation: true }, orderBy: { createdAt: 'desc' }, take: 15 }),
+      this.prisma.db.userRewardAllocation.findMany({ where: { userId, mode: 'PAPER' }, include: { rewardEpoch: true }, orderBy: { createdAt: 'desc' }, take: 10 }),
+    ]);
+    const events = [
+      ...rows.map((row) => ({ time: row.createdAt.toISOString(), agent: row.agentName, message: row.message, status: row.status, type: row.type, mode: 'PAPER' })),
+      ...deposits.flatMap((deposit) => {
+        const base = [{ time: deposit.createdAt.toISOString(), agent: 'Deposit', message: `${deposit.amount.toString()} ${deposit.asset} ${deposit.status.toLowerCase()}.`, status: deposit.status, type: 'DEPOSIT', mode: 'TESTNET' }];
+        if (deposit.status !== 'COMPLETED') return base;
+        const allocation = new Map(deposit.allocations.map((item) => [item.fundDomain, item.amount.toString()]));
+        return [...base, { time: (deposit.allocatedAt ?? deposit.updatedAt).toISOString(), agent: 'Allocation', message: `${allocation.get('BULL') ?? '0'} / ${allocation.get('SPOT') ?? '0'} / ${allocation.get('FUTURES') ?? '0'} allocated.`, status: '50 / 30 / 20', type: 'ALLOCATION', mode: 'TESTNET' }];
+      }),
+      ...principalEntries.map((entry) => ({ time: entry.createdAt.toISOString(), agent: 'XP', message: `+${entry.amount.toString()} Principal XP.`, status: 'POSTED', type: 'XP', mode: 'TESTNET' })),
+      ...rewards.map((reward) => ({ time: reward.createdAt.toISOString(), agent: 'Reward', message: `Paper epoch ${String(reward.rewardEpoch.number)}: ${reward.grossReward.toString()} reward.`, status: reward.status, type: 'REWARD', mode: 'PAPER' })),
+    ];
+    return events.sort((left, right) => right.time.localeCompare(left.time)).slice(0, 50);
   }
 
   async runCycle(cycleId = `${STRATEGY_CODE}:${String(Math.floor(Date.now() / 60_000))}`): Promise<{ status: string; cycleId: string }> {

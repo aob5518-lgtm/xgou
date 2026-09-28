@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { getChainConfig } from '@xgou/chains';
 import { Decimal } from 'decimal.js';
 import { DeploymentRegistryService } from '../chain/deployment-registry.service.js';
+import { ArcChainAdapter } from '../chain/arc-chain.adapter.js';
 import { PrismaService } from '../database/prisma.service.js';
 
 @Injectable()
@@ -9,11 +10,12 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly deployments: DeploymentRegistryService,
+    private readonly arc: ArcChainAdapter,
   ) {}
 
   async get(userId: string) {
     const chain = getChainConfig(process.env.CHAIN_ENV);
-    const [user, allocations, principalAggregate, latestSnapshot, latestDeposit, spotStrategy] = await Promise.all([
+    const [user, allocations, principalAggregate, latestSnapshot, latestDeposit, spotStrategy, futuresStrategy, rewardEpoch] = await Promise.all([
       this.prisma.db.user.findUniqueOrThrow({ where: { id: userId } }),
       this.prisma.db.fundAllocation.groupBy({
         by: ['fundDomain'],
@@ -28,6 +30,8 @@ export class DashboardService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.db.strategy.findUnique({ where: { code: 'SPOT_SWING_V1' }, select: { status: true } }),
+      this.prisma.db.strategy.findUnique({ where: { code: 'FUTURES_TREND_V1' }, select: { status: true } }),
+      this.prisma.db.rewardEpoch.findFirst({ where: { mode: 'PAPER', status: 'FINALIZED' }, orderBy: { number: 'desc' }, select: { number: true, status: true, finalizedAt: true } }),
     ]);
     const amounts = new Map(allocations.map((item) => [item.fundDomain, new Decimal(item._sum.amount?.toString() ?? 0)]));
     const bull = amounts.get('BULL') ?? new Decimal(0);
@@ -68,6 +72,41 @@ export class DashboardService {
       } : null,
       dataMode: 'TESTNET_REAL_LEDGER',
       agentStatus: spotStrategy?.status ?? 'NOT_ACTIVE_YET',
+      paperAgents: {
+        spot: spotStrategy?.status ?? 'NO_PAPER_CYCLE_DATA',
+        futures: futuresStrategy?.status ?? 'NO_PAPER_CYCLE_DATA',
+      },
+      rewardSummary: rewardEpoch ? { epoch: rewardEpoch.number, status: rewardEpoch.status, finalizedAt: rewardEpoch.finalizedAt?.toISOString() ?? null } : null,
+    };
+  }
+
+  async bullFund(userId: string) {
+    const deployment = this.deployments.state();
+    const [allocation, deposits] = await Promise.all([
+      this.prisma.db.fundAllocation.aggregate({ where: { fundDomain: 'BULL', status: 'POSTED', deposit: { userId, status: 'COMPLETED' } }, _sum: { amount: true } }),
+      this.prisma.db.deposit.findMany({
+        where: { userId, status: 'COMPLETED' },
+        include: { allocations: { where: { fundDomain: 'BULL', status: 'POSTED' } }, chainReference: true },
+        orderBy: { createdAt: 'desc' }, take: 50,
+      }),
+    ]);
+    let vaultBalanceEvidence: string | null = null;
+    if (deployment.deployed && deployment.bullVault) {
+      try {
+        const raw = await this.arc.getTokenBalance(deployment.usdc, deployment.bullVault);
+        vaultBalanceEvidence = new Decimal(raw.toString()).div(new Decimal(10).pow(6)).toFixed();
+      } catch {
+        vaultBalanceEvidence = null;
+      }
+    }
+    return {
+      allocatedPrincipal: allocation._sum.amount?.toString() ?? '0',
+      allocationRatio: '0.50',
+      vault: { address: deployment.deployed ? deployment.bullVault : null, status: deployment.deployed ? 'DEPLOYED' : 'NOT_DEPLOYED', balanceEvidence: vaultBalanceEvidence },
+      cycleStage: 'RESEARCH',
+      strategyStatus: 'PAPER_RESEARCH',
+      deposits: deposits.map((deposit) => ({ id: deposit.id, amount: deposit.amount.toString(), bullAmount: deposit.allocations[0]?.amount.toString() ?? '0', txHash: deposit.chainReference?.txHash ?? null, completedAt: deposit.allocatedAt?.toISOString() ?? null })),
+      dataMode: 'TESTNET_REAL_LEDGER',
     };
   }
 }

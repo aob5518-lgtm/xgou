@@ -21,6 +21,7 @@ const fixture = (overrides: {
     participation: { findMany: vi.fn().mockResolvedValue(overrides.ownParticipations ?? []) },
     referralEdge: { findMany: vi.fn().mockResolvedValue(overrides.directEdges ?? []) },
     referralClosure: { findMany: vi.fn().mockResolvedValue(overrides.closure ?? []) },
+    user: { findUniqueOrThrow: vi.fn().mockResolvedValue({ walletAddress: '0x0000000000000000000000000000000000000001', inviterEdge: null }) },
   };
   const configs = {
     current: vi.fn().mockResolvedValue({ version: 11, values: currentConfig }),

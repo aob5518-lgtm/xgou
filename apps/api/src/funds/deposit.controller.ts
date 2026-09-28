@@ -27,6 +27,14 @@ export class DepositController {
     return this.deposits.list(user.userId);
   }
 
+  @Get('config')
+  config() { return this.deposits.config(); }
+
+  @Get(':id')
+  get(@CurrentUser() user: AuthenticatedUser, @Param('id') depositId: string): Promise<DepositView> {
+    return this.deposits.get(user.userId, depositId);
+  }
+
   @Post(':id/tx-submitted')
   transactionSubmitted(
     @CurrentUser() user: AuthenticatedUser,

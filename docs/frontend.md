@@ -1,44 +1,29 @@
-# XGOU Frontend Preview
+# XGOU frontend
 
-## Frontend architecture
+`apps/web` is the frozen Next.js App Router UI. The visual system remains unchanged; V1 adds functional wiring and explicit runtime states.
 
-`apps/web` is a Next.js App Router application inside the existing pnpm/Turborepo workspace. The landing page is public; product routes share a responsive App Shell with a desktop sidebar and mobile bottom navigation. Server components obtain view models through `XgouDataProvider`; interactive financial previews remain isolated client components.
+## Modes
 
-The preview deliberately contains no deposit, approval, withdrawal, contract, exchange, or live trading command. Wallet connection is display-only.
+- `NEXT_PUBLIC_APP_MODE=demo`: the only mode allowed to instantiate `DemoXgouDataProvider`.
+- `NEXT_PUBLIC_APP_MODE=testnet`: uses `ApiXgouDataProvider`, Arc Testnet wallet/SIWE and the deployed DepositRouter. API failures produce typed unavailable/authentication errors and never return Demo fixtures.
+- `production`: reserved and not enabled. Mainnet, live trading, real withdrawals and real reward distribution remain disabled.
 
-## Demo Data Provider
+TESTNET Dashboard, Bull Fund, Agent, Rewards, XP and Activity are loaded in the browser after SIWE so the bearer session never runs during static generation. Access-token expiry attempts the existing CSRF-protected refresh flow once; failure clears the session and returns to an explicit login-required state.
 
-`src/services/xgou-data-provider.ts` defines one interface for Dashboard, Bull, Agent, Rewards, XP, Activity, and Referral data. `DemoXgouDataProvider` reads the single typed source in `src/lib/demo-data.ts`. `ApiXgouDataProvider` defines the future HTTP boundary without coupling components to transport details.
+The Join flow reads the deployment and chain registries, wallet USDC balance, minimum deposit configuration and allowance. It creates an idempotent intent, approves only the requested amount when necessary, submits to the Arc Testnet router, waits for the receipt and polls the exact deposit until allocation completes. It never presents a submitted transaction as completed prematurely.
 
-Demo mode is enabled unless `NEXT_PUBLIC_DEMO_MODE=false` is explicitly supplied. Preview deployments must keep it enabled until matching authenticated API resources exist.
+## Vercel
 
-## Brain rendering
-
-The hero brain is generated in WebGL using Three.js, React Three Fiber, and Drei point materials. Two procedural particle hemispheres preserve the Red Brain / Blue Brain identity; the blue side represents Spot 30% and Futures 20% as one Agent brain. Pointer position influences rotation and pulse without moving capital or invoking an AI service.
-
-The canvas is dynamically imported with SSR disabled. Dashboard uses a lower particle count. No bitmap brain asset is required.
-
-## Mobile and fallback behavior
-
-- Responsive layout targets 375, 390, 430, 768, 1024, 1440, and 1920 pixel widths without horizontal page overflow.
-- Mobile receives a lower device-pixel ratio and reduced particle count.
-- `prefers-reduced-motion` replaces WebGL animation with an SVG/CSS brain.
-- WebGL capability is checked before canvas initialization; unsupported browsers receive the same fallback.
-- A loading fallback prevents a blank first paint while the Three.js bundle loads.
-
-## Vercel deployment
-
-Import `aob5518-lgtm/xgou` and configure Vercel with these settings:
-
+- Repository: `aob5518-lgtm/xgou`
 - Root Directory: `apps/web`
-- Framework Preset: Next.js
+- Framework: Next.js
 - Node.js: 22
-- Install Command: Vercel default (`pnpm install`); use `pnpm install --frozen-lockfile` only if workspace detection requires an explicit command
-- Build Command: `pnpm build`
-- Output Directory: leave empty to use the Next.js default
+- Install: Vercel default pnpm install
+- Build: `pnpm build`
+- Output Directory: empty / Next.js default
 
-Preview deployments require only the four public values in `apps/web/.env.example`. `NEXT_PUBLIC_API_URL` is retained as the future API boundary, but it is not requested or used by pages while `NEXT_PUBLIC_DEMO_MODE=true`. Do not add database credentials, JWT secrets, private keys, exchange keys, or RPC secrets to the frontend deployment.
+For a Demo preview configure `NEXT_PUBLIC_APP_MODE=demo`. For the V1 acceptance deployment configure `NEXT_PUBLIC_APP_MODE=testnet`, `NEXT_PUBLIC_DEMO_MODE=false`, `NEXT_PUBLIC_CHAIN_ENV=arc-testnet`, and a publicly reachable HTTPS `NEXT_PUBLIC_API_URL` ending in `/v1`. Never add database, JWT, private-key, RPC-secret or exchange credentials to the frontend project.
 
-## Future API integration
+## Responsive and fallback behavior
 
-When authenticated preview endpoints are available, set `NEXT_PUBLIC_DEMO_MODE=false` and implement endpoint mapping in `ApiXgouDataProvider`. Chain registry, Arc parameters, contract writes, SIWE UI integration, real reward settlement, and trading execution remain later phases. They must not be added as client-side shortcuts.
+The existing responsive layout covers 375, 390, 430, 768, 1024 and 1440 pixel widths. Join controls wrap safely, transaction hashes break across lines, and disabled wallet/network/session states remain keyboard accessible. WebGL capability and reduced-motion checks continue to select the static Brain fallback.

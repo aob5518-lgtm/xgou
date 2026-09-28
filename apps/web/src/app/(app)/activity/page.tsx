@@ -1,4 +1,13 @@
+'use client';
 import { ActivityFeed } from '@/components/activity/ActivityFeed';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { getXgouDataProvider } from '@/services/xgou-data-provider';
-export default async function ActivityPage() { const activities = await getXgouDataProvider().getActivities(); return <><PageHeader eyebrow="AGENT TELEMETRY · PAPER" title="Neural Activity Stream" description="研究、信号、风控与 Paper Execution 事件流；真实下单与链上资金操作均已禁用。" /><ActivityFeed initial={activities} /></>; }
+import { getAppMode } from '@/lib/app-mode';
+import { useXgouResource } from '@/hooks/useXgouResource';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/DataState';
+export default function ActivityPage() {
+  const query = useXgouResource('getActivities');
+  if (query.loading) return <LoadingState/>;
+  if (query.error) return <ErrorState error={query.error} retry={query.refresh}/>;
+  if (!query.data) return <LoadingState/>;
+  return <><PageHeader eyebrow="SYSTEM ACTIVITY · TESTNET + PAPER" title="Neural Activity Stream" description="Deposit、Allocation、XP、Agent 与 Paper Reward 事件流。"/>{query.data.length === 0 ? <EmptyState message="No activity yet."/> : <ActivityFeed initial={query.data} liveDemo={getAppMode() === 'demo'}/>}</>;
+}

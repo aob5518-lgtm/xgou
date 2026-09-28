@@ -12,6 +12,11 @@ export interface XpSummary {
   readonly eligibleForDynamicXp: boolean;
   readonly unlockedDepth: number;
   readonly networkPrincipalXp: string;
+  readonly effectiveParticipation: string;
+  readonly qualification: string;
+  readonly qualificationRemaining: string;
+  readonly walletAddress: string;
+  readonly inviterWalletAddress: string | null;
 }
 
 @Injectable()
@@ -31,7 +36,7 @@ export class XpService {
       ? await this.configs.current()
       : await this.configs.byVersion(configVersion);
     const config = configRecord.values;
-    const [ownAggregate, ownParticipations, directEdges, closure] = await Promise.all([
+    const [ownAggregate, ownParticipations, directEdges, closure, user] = await Promise.all([
       this.prisma.db.principalXpEntry.aggregate({
         where: { userId, participation: { status: 'EFFECTIVE', effectiveAt: { lt: asOf } } },
         _sum: { amount: true },
@@ -48,6 +53,7 @@ export class XpService {
         where: { ancestorId: userId, depth: { gte: 1, lte: config.maxReferralDepth }, createdAt: { lt: asOf } },
         select: { descendantId: true, depth: true },
       }),
+      this.prisma.db.user.findUniqueOrThrow({ where: { id: userId }, include: { inviterEdge: { include: { inviter: { select: { walletAddress: true } } } } } }),
     ]);
 
     const threshold = new Decimal(config.minReferralQualification);
@@ -84,6 +90,11 @@ export class XpService {
       eligibleForDynamicXp,
       unlockedDepth: calculated.unlockedDepth,
       networkPrincipalXp: calculated.networkPrincipalXp.toFixed(),
+      effectiveParticipation: effectiveParticipation.toFixed(),
+      qualification: threshold.toFixed(),
+      qualificationRemaining: Decimal.max(0, threshold.minus(effectiveParticipation)).toFixed(),
+      walletAddress: user.walletAddress,
+      inviterWalletAddress: user.inviterEdge?.inviter.walletAddress ?? null,
     };
   }
 }

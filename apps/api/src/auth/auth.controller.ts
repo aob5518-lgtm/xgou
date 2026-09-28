@@ -25,7 +25,7 @@ export class AuthController {
     @Body() body: unknown,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<{ accessToken: string }> {
+  ): Promise<{ accessToken: string; csrfToken: string }> {
     const input = parseBody(verifySiweSchema, body);
     return this.writeSession(
       response,
@@ -34,7 +34,7 @@ export class AuthController {
   }
 
   @Post('refresh')
-  async refresh(@Req() request: Request, @Res({ passthrough: true }) response: Response): Promise<{ accessToken: string }> {
+  async refresh(@Req() request: Request, @Res({ passthrough: true }) response: Response): Promise<{ accessToken: string; csrfToken: string }> {
     const token = request.cookies[REFRESH_COOKIE] as string | undefined;
     const csrfCookie = request.cookies[CSRF_COOKIE] as string | undefined;
     const csrfHeader = request.header('x-csrf-token');
@@ -50,27 +50,27 @@ export class AuthController {
       throw new UnauthorizedException('CSRF validation failed');
     }
     await this.auth.revoke(token);
-    response.clearCookie(REFRESH_COOKIE);
-    response.clearCookie(CSRF_COOKIE);
+    response.clearCookie(REFRESH_COOKIE, { path: '/' });
+    response.clearCookie(CSRF_COOKIE, { path: '/' });
     return { success: true };
   }
 
-  private writeSession(response: Response, tokens: SessionTokens): { accessToken: string } {
+  private writeSession(response: Response, tokens: SessionTokens): { accessToken: string; csrfToken: string } {
     const secure = process.env.NODE_ENV === 'production';
     response.cookie(REFRESH_COOKIE, tokens.refreshToken, {
       httpOnly: true,
       secure,
-      sameSite: 'strict',
-      path: '/v1/auth',
+      sameSite: secure ? 'none' : 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     response.cookie(CSRF_COOKIE, tokens.csrfToken, {
       httpOnly: false,
       secure,
-      sameSite: 'strict',
-      path: '/v1/auth',
+      sameSite: secure ? 'none' : 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-    return { accessToken: tokens.accessToken };
+    return { accessToken: tokens.accessToken, csrfToken: tokens.csrfToken };
   }
 }

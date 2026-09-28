@@ -52,7 +52,7 @@ export const assertBinanceMinNotional = (metadata: BinanceSymbolMetadata, quanti
 };
 
 export class BinanceSymbolMapper {
-  constructor(private readonly symbols: Readonly<Record<string, string>> = { 'BTC/USDC': 'BTCUSDT', 'ETH/USDC': 'ETHUSDT', 'BTC/USDT': 'BTCUSDT', 'ETH/USDT': 'ETHUSDT' }) {}
+  constructor(private readonly symbols: Readonly<Record<string, string>> = { 'BTC/USDC': 'BTCUSDT', 'ETH/USDC': 'ETHUSDT', 'SOL/USDC': 'SOLUSDT', 'BTC/USDT': 'BTCUSDT', 'ETH/USDT': 'ETHUSDT', 'SOL/USDT': 'SOLUSDT' }) {}
   toExchange(internalSymbol: string): string {
     const symbol = this.symbols[internalSymbol];
     if (!symbol) throw new Error(`unsupported Binance sandbox symbol: ${internalSymbol}`);

@@ -8,6 +8,7 @@ import {
   BinanceClock,
   BinanceFuturesSandboxAdapter,
   BinanceHttpClient,
+  BinanceSymbolMapper,
   BinanceSigner,
   BinanceSpotSandboxAdapter,
   assertBinanceSandboxGate,
@@ -80,6 +81,10 @@ describe('Binance signing and order identity', () => {
 });
 
 describe('Binance metadata and clock', () => {
+  it('maps every V1 internal USDC asset to an isolated testnet USDT symbol', () => {
+    const mapper = new BinanceSymbolMapper();
+    expect(['BTC/USDC', 'ETH/USDC', 'SOL/USDC'].map((symbol) => mapper.toExchange(symbol))).toEqual(['BTCUSDT', 'ETHUSDT', 'SOLUSDT']);
+  });
   const metadata = { symbol: 'BTCUSDT', status: 'TRADING', baseAsset: 'BTC', quoteAsset: 'USDT', filters: [
     { filterType: 'LOT_SIZE', minQty: '0.001000', maxQty: '100.000000', stepSize: '0.001000' },
     { filterType: 'PRICE_FILTER', minPrice: '0.10', maxPrice: '1000000.00', tickSize: '0.10' },

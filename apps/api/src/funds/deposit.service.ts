@@ -38,6 +38,9 @@ export interface DepositView {
   readonly routerAddress: string;
   readonly assetAddress: string;
   readonly createdAt: string;
+  readonly allocations: readonly { readonly fundDomain: string; readonly amount: string }[];
+  readonly principalXp: string;
+  readonly blockNumber: string | null;
 }
 
 @Injectable()
@@ -126,10 +129,34 @@ export class DepositService {
   async list(userId: string): Promise<readonly DepositView[]> {
     const deposits = await this.prisma.db.deposit.findMany({
       where: { userId },
-      include: { chainReference: true },
+      include: { chainReference: true, allocations: true },
       orderBy: { createdAt: 'desc' },
     });
-    return deposits.flatMap((deposit) => deposit.chainReference ? [this.view(deposit, deposit.chainReference)] : []);
+    return Promise.all(deposits.flatMap((deposit) => deposit.chainReference ? [this.viewWithDetails(deposit, deposit.chainReference)] : []));
+  }
+
+  async get(userId: string, depositId: string): Promise<DepositView> {
+    const deposit = await this.prisma.db.deposit.findUnique({
+      where: { id: depositId },
+      include: { chainReference: true, allocations: true },
+    });
+    if (!deposit?.chainReference) throw new NotFoundException('deposit not found');
+    if (deposit.userId !== userId) throw new ForbiddenException('deposit belongs to another user');
+    return this.viewWithDetails(deposit, deposit.chainReference);
+  }
+
+  async config() {
+    const current = await this.configs.current();
+    return {
+      minimumDeposit: '1',
+      xpPerDollar: current.values.xpPerDollar,
+      allocations: {
+        BULL: current.values.bullAllocation,
+        SPOT: current.values.spotStrategyAllocation,
+        FUTURES: current.values.futuresStrategyAllocation,
+      },
+      configVersion: current.version,
+    };
   }
 
   async markTransactionSubmitted(userId: string, depositId: string, txHash: string, audit: AuditContext): Promise<DepositView> {
@@ -350,11 +377,13 @@ export class DepositService {
     tokenDecimals: number;
     status: string;
     createdAt: Date;
+    allocations?: readonly { fundDomain: string; amount: { toString(): string } }[];
   }, chainReference: {
     clientReference: string;
     txHash: string | null;
     routerAddress: string;
     assetAddress: string;
+    blockNumber?: bigint | null;
   }): DepositView {
     return {
       id: deposit.id,
@@ -368,6 +397,17 @@ export class DepositService {
       routerAddress: chainReference.routerAddress,
       assetAddress: chainReference.assetAddress,
       createdAt: deposit.createdAt.toISOString(),
+      allocations: (deposit.allocations ?? []).map((allocation) => ({ fundDomain: allocation.fundDomain, amount: allocation.amount.toString() })),
+      principalXp: '0',
+      blockNumber: chainReference.blockNumber?.toString() ?? null,
     };
+  }
+
+  private async viewWithDetails(deposit: Parameters<DepositService['view']>[0] & { id: string }, chainReference: Parameters<DepositService['view']>[1]): Promise<DepositView> {
+    const participation = await this.prisma.db.participation.findUnique({
+      where: { externalRef: `deposit:${deposit.id}` },
+      include: { principalXp: true },
+    });
+    return { ...this.view(deposit, chainReference), principalXp: participation?.principalXp?.amount.toString() ?? '0' };
   }
 }

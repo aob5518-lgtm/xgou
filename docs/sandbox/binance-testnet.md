@@ -1,5 +1,7 @@
 # Binance Testnet execution
 
+**Status: SANDBOX ADAPTER READY — EXTERNAL E2E PENDING.** Authenticated Binance validation is non-blocking for XGOU V1 and Production Readiness remains FAIL.
+
 Documentation verified: 2026-09-27.
 
 Official references:

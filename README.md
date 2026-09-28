@@ -76,9 +76,9 @@ pnpm --filter @xgou/web dev
 
 打开 `http://localhost:3000`。使用 `pnpm dev` 可同时启动 Web `:3000` 和 API `:3001`（API 功能需本地数据库）。
 
-## Demo Mode
+## App modes
 
-`NEXT_PUBLIC_DEMO_MODE=true` 是 Preview 默认值。所有 `NEXT_PUBLIC_*` 变量只包含公开配置，不允许 secret。Demo 不会发送资产、token approval、合约调用或 CEX 命令。
+`NEXT_PUBLIC_APP_MODE=demo` 仅用于展示，只有该模式会读取 Demo fixture。V1 使用 `NEXT_PUBLIC_APP_MODE=testnet`，连接真实 XGOU API 和 Arc Testnet；API 失败不会回退 Demo。所有 `NEXT_PUBLIC_*` 变量只能包含公开配置，不允许 secret。
 
 ## Vercel Deployment
 
@@ -90,14 +90,14 @@ pnpm --filter @xgou/web dev
 - Build Command: `pnpm build`
 - Output Directory: Next.js default（留空）
 - Node.js: 22
-- Environment: 按 `apps/web/.env.example` 配置四个公开变量
+- Environment: 按 `apps/web/.env.example` 配置公开变量
 
-Preview 保持 `NEXT_PUBLIC_DEMO_MODE=true`，因此页面不会请求 `NEXT_PUBLIC_API_URL`，也不依赖 API、PostgreSQL、Redis 或 RPC 才能渲染。前端部署不得加入数据库、JWT、私钥、交易所或 RPC Secret。
+Demo Preview 可设 `NEXT_PUBLIC_APP_MODE=demo`。V1 Testnet 必须设 `NEXT_PUBLIC_APP_MODE=testnet`、`NEXT_PUBLIC_DEMO_MODE=false` 和可公开访问的 HTTPS API URL。前端部署不得加入数据库、JWT、私钥、交易所或 RPC Secret。
 
 ## Authentication API
 
 1. `POST /v1/auth/nonce`，body 为 `{ "walletAddress": "0x..." }`。
-2. 客户端使用返回 nonce、配置的 domain/URI 和 Sepolia chain ID 构建并签署 EIP-4361 消息。
+2. 客户端使用返回 nonce、配置的 domain/URI 和 Arc Testnet chain ID 构建并签署 EIP-4361 消息。
 3. `POST /v1/auth/verify`，body 为 `{ "message": "...", "signature": "0x..." }`。
 4. 后续业务请求使用 `Authorization: Bearer <accessToken>`。
 5. `POST /v1/auth/refresh` 和 `/logout` 同时发送 refresh cookie 与 `x-csrf-token` header。

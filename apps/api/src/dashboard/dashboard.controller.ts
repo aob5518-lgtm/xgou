@@ -11,4 +11,7 @@ export class DashboardController {
 
   @Get()
   get(@CurrentUser() user: AuthenticatedUser) { return this.dashboard.get(user.userId); }
+
+  @Get('bull-fund')
+  bullFund(@CurrentUser() user: AuthenticatedUser) { return this.dashboard.bullFund(user.userId); }
 }
