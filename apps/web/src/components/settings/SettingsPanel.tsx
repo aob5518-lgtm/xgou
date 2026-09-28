@@ -1,17 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import { useConnection } from 'wagmi';
+import { useEffect, useState } from 'react';
 import { getChainConfig } from '@xgou/chains';
 import { getAppMode } from '@/lib/app-mode';
+import { readSession } from '@/services/auth-session';
 
 const toggles = [{ key: 'reducedMotion', label: '减少动态效果' }, { key: 'notifications', label: '通知' }] as const;
 
 export function SettingsPanel() {
   const [values, setValues] = useState<Record<string, boolean>>({ reducedMotion: false, notifications: true });
-  const { address } = useConnection(); const chain = getChainConfig(process.env.NEXT_PUBLIC_CHAIN_ENV); const mode = getAppMode();
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const chain = getChainConfig(process.env.NEXT_PUBLIC_CHAIN_ENV); const mode = getAppMode();
+  useEffect(() => { setWalletAddress(readSession()?.walletAddress ?? null); }, []);
   const rows = [
-    ['已连接钱包', address ?? '未连接'], ['网络', chain.name], ['App Mode', mode.toUpperCase()], ['Arc Chain ID', String(chain.id)],
+    ['已连接钱包', walletAddress ?? '未连接'], ['网络', chain.name], ['App Mode', mode.toUpperCase()], ['Arc Chain ID', String(chain.id)],
     ['Execution Mode', 'PAPER / SANDBOX DISABLED'], ['Trading status', 'REAL TRADING DISABLED'], ['Reward status', 'PAPER · NOT WITHDRAWABLE'],
     ['Mainnet', 'MAINNET DISABLED'], ['Withdrawals', 'WITHDRAWALS DISABLED'], ['语言', '中文 / English'],
   ];
